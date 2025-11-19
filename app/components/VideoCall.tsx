@@ -125,6 +125,12 @@ const ICE_SERVER_CONFIGS = {
     name: "Только TURN (максимальная совместимость)",
     config: {
       iceServers: [
+        // Numb TURN (popular but sometimes unreliable)
+        {
+          urls: "turn:numb.viagenie.ca",
+          username: "webrtc@live.com",
+          credential: "muazkh",
+        },
         // FREE TURN servers - multiple for failover
         {
           urls: "turn:freeturn.net:3478",
@@ -143,6 +149,11 @@ const ICE_SERVER_CONFIGS = {
         },
         {
           urls: "turn:freestun.net:3478",
+          username: "free",
+          credential: "free",
+        },
+        {
+          urls: "turn:freestun.net:5349",
           username: "free",
           credential: "free",
         },
@@ -321,6 +332,14 @@ export default function VideoCall() {
     addDebugLog(`🔧 Creating peer connection with ${userId}, initiator: ${createOffer}`);
     const peerConnection = new RTCPeerConnection(iceServers);
 
+    // Track relay candidates
+    let hasRelayCandidates = false;
+    const candidateTimeout = setTimeout(() => {
+      if (!hasRelayCandidates) {
+        addDebugLog(`⚠️ WARNING: No TURN relay candidates for ${userId} - check TURN servers!`);
+      }
+    }, 10000); // Check after 10 seconds
+
     // Добавляем локальные треки
     if (localStreamRef.current) {
       const tracks = localStreamRef.current.getTracks();
@@ -354,14 +373,24 @@ export default function VideoCall() {
     // Обработка ICE candidates
     peerConnection.onicecandidate = (event) => {
       if (event.candidate && socketRef.current) {
-        addDebugLog(`🧊 ICE candidate for ${userId}: ${event.candidate.type} (${event.candidate.protocol})`);
+        const candidateType = event.candidate.type;
+        addDebugLog(`🧊 ICE candidate for ${userId}: ${candidateType} (${event.candidate.protocol})`);
         addDebugLog(`  └─ ${event.candidate.address || 'no-address'}:${event.candidate.port || 'no-port'}`);
+
+        // Track relay candidates
+        if (candidateType === 'relay') {
+          hasRelayCandidates = true;
+          clearTimeout(candidateTimeout);
+          addDebugLog(`✅ TURN relay candidate found for ${userId}!`);
+        }
+
         socketRef.current.emit("ice-candidate", {
           to: userId,
           candidate: event.candidate,
         });
       } else if (!event.candidate) {
         addDebugLog(`✅ ICE gathering complete for ${userId}`);
+        clearTimeout(candidateTimeout);
       }
     };
 
@@ -516,6 +545,32 @@ export default function VideoCall() {
     window.location.href = "/";
   };
 
+  const reconnectAllPeers = () => {
+    addDebugLog(`🔄 Reconnecting all peers with new ICE servers...`);
+
+    // Get current peer IDs
+    const peerIds = Array.from(peersRef.current.keys());
+
+    if (peerIds.length === 0) {
+      addDebugLog(`⚠️ No active peers to reconnect`);
+      return;
+    }
+
+    // Close all existing connections
+    peerIds.forEach(userId => {
+      addDebugLog(`  └─ Closing connection to ${userId.substring(0, 8)}...`);
+      removePeer(userId);
+    });
+
+    // Recreate connections with new ICE servers
+    peerIds.forEach(userId => {
+      addDebugLog(`  └─ Recreating connection to ${userId.substring(0, 8)}...`);
+      createPeerConnection(userId, true);
+    });
+
+    addDebugLog(`✅ Reconnect initiated for ${peerIds.length} peer(s)`);
+  };
+
   const requestMediaPermissions = async () => {
     try {
       console.log("Перезапрос доступа к камере и микрофону...");
@@ -600,6 +655,8 @@ export default function VideoCall() {
                 const newRegion = e.target.value as keyof typeof ICE_SERVER_CONFIGS;
                 setSelectedRegion(newRegion);
                 addDebugLog(`🌍 Changed ICE servers to: ${ICE_SERVER_CONFIGS[newRegion].name}`);
+                // Reconnect all peers with new ICE servers
+                setTimeout(() => reconnectAllPeers(), 100);
               }}
               className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg shadow-sm hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
