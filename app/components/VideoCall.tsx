@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import MediaControls from "./MediaControls";
+import DebugPanel from "./DebugPanel";
 
 interface PeerConnection {
   connection: RTCPeerConnection;
@@ -14,6 +15,8 @@ export default function VideoCall() {
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
   const [connectionStatus, setConnectionStatus] = useState<string>("Подключение...");
   const [participantCount, setParticipantCount] = useState<number>(0);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -81,9 +84,17 @@ export default function VideoCall() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debug helper
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    setDebugInfo(prev => [...prev.slice(-50), logMessage]); // Keep last 50 messages
+  };
+
   const initializeMedia = async () => {
     try {
-      console.log("Initializing media...");
+      addDebugLog("🚀 Initializing media...");
 
       // Проверяем поддержку WebRTC
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -91,48 +102,51 @@ export default function VideoCall() {
       }
 
       // Получаем доступ к камере и микрофону
-      console.log("Requesting media access...");
+      addDebugLog("📹 Requesting camera and microphone access...");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
       });
-      console.log("Media access granted", stream);
+      const tracks = stream.getTracks();
+      addDebugLog(`✅ Media access granted: ${tracks.map(t => `${t.kind}:${t.label}`).join(', ')}`);
 
       localStreamRef.current = stream;
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        addDebugLog("📺 Local video element connected");
       }
 
       setConnectionStatus("Подключение к серверу...");
 
       // Подключаемся к Socket.IO серверу
-      console.log("Connecting to Socket.IO server...");
+      addDebugLog("🔌 Connecting to Socket.IO server...");
       const socket = io({
         transports: ['websocket', 'polling'],
       });
       socketRef.current = socket;
 
       socket.on("connect", () => {
-        console.log("Connected to server with ID:", socket.id);
+        addDebugLog(`🔌 Connected to Socket.IO server, my ID: ${socket.id}`);
         setConnectionStatus("Ожидание участников...");
         setParticipantCount(1);
       });
 
       socket.on("connect_error", (error) => {
-        console.error("Socket.IO connection error:", error);
+        addDebugLog(`❌ Socket.IO connection error: ${error.message}`);
         setConnectionStatus("Ошибка подключения к серверу");
       });
 
       socket.on("disconnect", (reason) => {
-        console.log("Disconnected from server:", reason);
+        addDebugLog(`❌ Disconnected from Socket.IO server: ${reason}`);
         setConnectionStatus("Отключено от сервера");
       });
 
       // Получаем список существующих пользователей
       socket.on("existing-users", (userIds: string[]) => {
-        console.log("Existing users:", userIds);
+        addDebugLog(`👥 Received existing users list: ${userIds.length} users`);
         userIds.forEach((userId) => {
+          addDebugLog(`  └─ Will connect to: ${userId.substring(0, 8)}...`);
           createPeerConnection(userId, true);
         });
         setParticipantCount(userIds.length + 1);
@@ -140,7 +154,7 @@ export default function VideoCall() {
 
       // Новый пользователь присоединился
       socket.on("user-joined", (userId: string) => {
-        console.log("User joined:", userId);
+        addDebugLog(`👤 New user joined: ${userId.substring(0, 8)}...`);
         createPeerConnection(userId, false);
         setParticipantCount((prev) => prev + 1);
         setConnectionStatus("Участник присоединился");
@@ -148,89 +162,90 @@ export default function VideoCall() {
 
       // Получили offer от другого пользователя
       socket.on("offer", async ({ from, offer }) => {
-        console.log("📥 Received offer from:", from);
+        addDebugLog(`📥 Received offer from: ${from.substring(0, 8)}...`);
         const peer = peersRef.current.get(from);
         if (peer) {
-          console.log(`✅ Peer found for ${from}, setting remote description`);
+          addDebugLog(`  └─ Setting remote description for ${from.substring(0, 8)}...`);
           await peer.connection.setRemoteDescription(new RTCSessionDescription(offer));
-          console.log(`📤 Creating answer for ${from}`);
+          addDebugLog(`  └─ Creating answer for ${from.substring(0, 8)}...`);
           const answer = await peer.connection.createAnswer();
           await peer.connection.setLocalDescription(answer);
-          console.log(`📨 Sending answer to ${from}`);
+          addDebugLog(`📨 Sending answer to ${from.substring(0, 8)}...`);
           socket.emit("answer", { to: from, answer });
         } else {
-          console.error(`❌ No peer found for ${from}!`);
+          addDebugLog(`❌ No peer found for ${from.substring(0, 8)}...!`);
         }
       });
 
       // Получили answer от другого пользователя
       socket.on("answer", async ({ from, answer }) => {
-        console.log("📥 Received answer from:", from);
+        addDebugLog(`📥 Received answer from: ${from.substring(0, 8)}...`);
         const peer = peersRef.current.get(from);
         if (peer) {
-          console.log(`✅ Setting remote description from ${from}`);
+          addDebugLog(`  └─ Setting remote description from ${from.substring(0, 8)}...`);
           await peer.connection.setRemoteDescription(new RTCSessionDescription(answer));
         } else {
-          console.error(`❌ No peer found for ${from}!`);
+          addDebugLog(`❌ No peer found for ${from.substring(0, 8)}...!`);
         }
       });
 
       // Получили ICE candidate
       socket.on("ice-candidate", async ({ from, candidate }) => {
-        console.log("🧊 Received ICE candidate from:", from, "Type:", candidate.type);
+        addDebugLog(`🧊 Received ICE candidate from ${from.substring(0, 8)}...: ${candidate.type}`);
         const peer = peersRef.current.get(from);
         if (peer) {
           try {
             await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
-            console.log(`✅ Added ICE candidate from ${from}`);
-          } catch (err) {
-            console.error(`❌ Error adding ICE candidate from ${from}:`, err);
+            addDebugLog(`  └─ Added ICE candidate from ${from.substring(0, 8)}...`);
+          } catch (err: any) {
+            addDebugLog(`❌ Error adding ICE candidate from ${from.substring(0, 8)}...: ${err.message}`);
           }
         } else {
-          console.error(`❌ No peer found for ${from}!`);
+          addDebugLog(`❌ No peer found for ${from.substring(0, 8)}...!`);
         }
       });
 
       // Пользователь отключился
       socket.on("user-left", (userId: string) => {
-        console.log("User left:", userId);
+        addDebugLog(`👋 User left: ${userId.substring(0, 8)}...`);
         removePeer(userId);
         setParticipantCount((prev) => Math.max(1, prev - 1));
         setConnectionStatus("Участник отключился");
       });
 
-    } catch (err) {
-      console.error("Failed to get local stream", err);
+    } catch (err: any) {
+      addDebugLog(`❌ Failed to get local stream: ${err.message}`);
       setConnectionStatus("Ошибка доступа к камере/микрофону");
     }
   };
 
   const createPeerConnection = (userId: string, createOffer: boolean) => {
-    console.log(`Creating peer connection with ${userId}, createOffer: ${createOffer}`);
+    addDebugLog(`🔧 Creating peer connection with ${userId}, initiator: ${createOffer}`);
     const peerConnection = new RTCPeerConnection(iceServers);
 
     // Добавляем локальные треки
     if (localStreamRef.current) {
       const tracks = localStreamRef.current.getTracks();
-      console.log(`Adding ${tracks.length} local tracks to peer ${userId}`);
+      addDebugLog(`➕ Adding ${tracks.length} local tracks to peer ${userId}`);
       tracks.forEach((track) => {
-        console.log(`Adding track: ${track.kind}, enabled: ${track.enabled}`);
+        addDebugLog(`  └─ ${track.kind}: enabled=${track.enabled}, readyState=${track.readyState}`);
         peerConnection.addTrack(track, localStreamRef.current!);
       });
     } else {
-      console.error("No local stream available!");
+      addDebugLog(`❌ No local stream available!`);
     }
 
     // Обработка входящих треков
     peerConnection.ontrack = (event) => {
-      console.log("🎥 Received remote track from:", userId, "Track kind:", event.track.kind);
+      addDebugLog(`🎥 Received remote track from ${userId}: ${event.track.kind}`);
       const [remoteStream] = event.streams;
-      console.log("Remote stream:", remoteStream, "Tracks:", remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}`));
+      const trackInfo = remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}:${t.readyState}`).join(', ');
+      addDebugLog(`  └─ Stream tracks: ${trackInfo}`);
 
       const peer = peersRef.current.get(userId);
       if (peer) {
         peer.stream = remoteStream;
-        console.log("✅ Saved stream to peer object");
+        addDebugLog(`✅ Saved stream to peer ${userId}`);
       }
 
       // Создаем или обновляем видео элемент для удаленного пользователя
@@ -241,31 +256,57 @@ export default function VideoCall() {
     // Обработка ICE candidates
     peerConnection.onicecandidate = (event) => {
       if (event.candidate && socketRef.current) {
-        console.log(`🧊 ICE candidate for ${userId}:`, event.candidate.type);
+        addDebugLog(`🧊 ICE candidate for ${userId}: ${event.candidate.type} (${event.candidate.protocol})`);
+        addDebugLog(`  └─ ${event.candidate.address || 'no-address'}:${event.candidate.port || 'no-port'}`);
         socketRef.current.emit("ice-candidate", {
           to: userId,
           candidate: event.candidate,
         });
       } else if (!event.candidate) {
-        console.log(`✅ ICE gathering complete for ${userId}`);
+        addDebugLog(`✅ ICE gathering complete for ${userId}`);
       }
+    };
+
+    // Обработка ICE gathering state
+    peerConnection.onicegatheringstatechange = () => {
+      addDebugLog(`🧊 ICE gathering state for ${userId}: ${peerConnection.iceGatheringState}`);
     };
 
     // Обработка состояния соединения
     peerConnection.onconnectionstatechange = () => {
-      console.log(`🔗 Connection state with ${userId}:`, peerConnection.connectionState);
+      addDebugLog(`🔗 Connection state with ${userId}: ${peerConnection.connectionState}`);
       if (peerConnection.connectionState === "failed" ||
           peerConnection.connectionState === "disconnected") {
-        console.error(`❌ Connection ${peerConnection.connectionState} with ${userId}`);
+        addDebugLog(`❌ Connection ${peerConnection.connectionState} with ${userId}`);
         removePeer(userId);
       } else if (peerConnection.connectionState === "connected") {
-        console.log(`✅ Successfully connected to ${userId}`);
+        addDebugLog(`✅ Successfully connected to ${userId}`);
+        // Log selected ICE candidate pair
+        peerConnection.getStats().then(stats => {
+          stats.forEach(stat => {
+            if (stat.type === 'candidate-pair' && stat.state === 'succeeded') {
+              addDebugLog(`  └─ Using ICE pair: ${stat.localCandidateId} ↔ ${stat.remoteCandidateId}`);
+            }
+          });
+        });
       }
     };
 
     // Обработка ICE connection state
     peerConnection.oniceconnectionstatechange = () => {
-      console.log(`🧊 ICE connection state with ${userId}:`, peerConnection.iceConnectionState);
+      addDebugLog(`🧊 ICE connection state with ${userId}: ${peerConnection.iceConnectionState}`);
+      if (peerConnection.iceConnectionState === 'failed') {
+        addDebugLog(`❌ ICE connection failed for ${userId} - NAT/firewall issue?`);
+      } else if (peerConnection.iceConnectionState === 'checking') {
+        addDebugLog(`🔍 Checking ICE candidates for ${userId}...`);
+      } else if (peerConnection.iceConnectionState === 'connected') {
+        addDebugLog(`✅ ICE connected to ${userId}`);
+      }
+    };
+
+    // Обработка signaling state
+    peerConnection.onsignalingstatechange = () => {
+      addDebugLog(`📡 Signaling state with ${userId}: ${peerConnection.signalingState}`);
     };
 
     peersRef.current.set(userId, { connection: peerConnection });
@@ -543,6 +584,13 @@ export default function VideoCall() {
           />
         </div>
       </div>
+
+      {/* Debug Panel */}
+      <DebugPanel
+        logs={debugInfo}
+        isOpen={showDebug}
+        onToggle={() => setShowDebug(!showDebug)}
+      />
     </div>
   );
 }
