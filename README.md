@@ -1,36 +1,205 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CallMe - Видеоконференция P2P
 
-## Getting Started
+Простой веб-портал для групповых видеозвонков с автоматическим присоединением всех пользователей.
 
-First, run the development server:
+## ✨ Особенности
+
+- 🎥 **P2P видеозвонки** через WebRTC
+- 🔗 **Автоматическое подключение** - без ID и паролей
+- 🌐 **Mesh-топология** - прямое соединение между всеми участниками
+- 🔒 **HTTPS** - безопасное подключение с SSL
+- 📱 **Мобильная поддержка** - работает на iOS и Android
+- 🐳 **Docker ready** - простое развертывание
+
+## 🚀 Быстрый старт
+
+### Docker (рекомендуется)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Собрать и запустить
+npm run docker:build
+npm run docker:up
+
+# Открыть в браузере
+https://localhost:4057
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Локальный запуск
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Установить зависимости
+npm install
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Запустить dev сервер
+npm run dev
 
-## Learn More
+# Открыть в браузере
+https://localhost:4057
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 📡 Доступ из сети
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Локально**: `https://localhost:4057`
+- **Локальная сеть**: `https://192.168.50.57:4057`
+- **Интернет (через DMZ)**: `https://176.36.188.208:4057`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📱 Мобильные устройства
 
-## Deploy on Vercel
+При первом открытии на телефоне:
+1. Браузер покажет предупреждение о сертификате
+2. Нажмите "Дополнительно" → "Перейти на сайт"
+3. Разрешите доступ к камере и микрофону
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Подробнее: см. `MOBILE_SETUP.md`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🐳 Docker команды
+
+```bash
+npm run docker:build    # Собрать образ
+npm run docker:up       # Запустить контейнер
+npm run docker:down     # Остановить контейнер
+npm run docker:logs     # Показать логи
+npm run docker:restart  # Перезапустить
+npm run docker:rebuild  # Пересобрать и перезапустить
+```
+
+## 🛠 Технологии
+
+- **Next.js 16** - React фреймворк
+- **React 19** - UI библиотека
+- **TypeScript** - Типизация
+- **Tailwind CSS 4** - Стили
+- **Socket.IO** - WebRTC сигнализация
+- **WebRTC** - P2P видео/аудио
+
+## 📚 Документация
+
+- [QUICK_START.md](QUICK_START.md) - Быстрый старт
+- [DOCKER.md](DOCKER.md) - Полное руководство по Docker
+- [MOBILE_SETUP.md](MOBILE_SETUP.md) - Настройка для мобильных
+- [DEBUG.md](DEBUG.md) - Отладка и устранение проблем
+- [CLAUDE.md](CLAUDE.md) - Техническая документация
+- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) - План реализации
+
+## 🔧 Разработка
+
+```bash
+# Dev сервер с hot reload
+npm run dev
+
+# Production сборка
+npm run build
+npm run start
+
+# Линтинг
+npm run lint
+```
+
+## 📦 Структура проекта
+
+```
+callme/
+├── app/                    # Next.js App Router
+│   ├── components/        # React компоненты
+│   │   ├── VideoCall.tsx  # Основной компонент видеозвонка
+│   │   └── MediaControls.tsx
+│   ├── videocall/         # Страница видеозвонка
+│   └── page.tsx           # Главная страница
+├── ssl/                   # SSL сертификаты
+│   ├── cert.pem
+│   └── key.pem
+├── server.js              # Custom HTTPS + Socket.IO сервер
+├── Dockerfile             # Docker образ
+├── docker-compose.yml     # Docker Compose конфигурация
+└── package.json           # Зависимости и скрипты
+```
+
+## ⚙️ Переменные окружения
+
+```env
+PORT=4057              # Порт сервера
+NODE_ENV=production    # Режим работы
+HOSTNAME=0.0.0.0       # Хост (0.0.0.0 для доступа из сети)
+```
+
+## 🌐 Сетевые настройки
+
+### Проброс портов на роутере
+
+Для доступа из интернета настройте проброс порта:
+- **External Port**: 4057
+- **Internal Port**: 4057
+- **Protocol**: TCP
+- **Internal IP**: 192.168.50.57
+
+### Или используйте DMZ
+
+Настройте DMZ на ваш локальный IP: `192.168.50.57`
+
+## 🔒 SSL Сертификаты
+
+Проект использует самоподписанные SSL сертификаты в папке `ssl/`.
+
+### Создание новых сертификатов
+
+```bash
+cd ssl
+openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
+  -keyout key.pem -out cert.pem -days 365 \
+  -config openssl.cnf
+```
+
+### Production сертификаты
+
+Для production рекомендуется использовать Let's Encrypt:
+
+```bash
+certbot certonly --standalone -d yourdomain.com
+cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ssl/cert.pem
+cp /etc/letsencrypt/live/yourdomain.com/privkey.pem ssl/key.pem
+```
+
+## 🐛 Устранение проблем
+
+### На телефоне не появляется запрос к камере
+✅ Убедитесь, что используете `https://` (не `http://`)
+
+### Предупреждение о сертификате
+✅ Это нормально для самоподписанных сертификатов - просто примите его
+
+### Видео не показывается
+✅ Откройте консоль браузера (F12) и проверьте логи
+✅ См. подробное руководство в `DEBUG.md`
+
+### Docker контейнер не запускается
+✅ Проверьте логи: `npm run docker:logs`
+✅ Убедитесь, что порт 4057 свободен
+
+## 📈 Производительность
+
+- **Mesh topology** подходит для 2-6 участников
+- Каждый участник создает прямое P2P соединение с остальными
+- Для больших конференций (>6) рекомендуется SFU архитектура
+
+## 🤝 Вклад в проект
+
+Проект создан с помощью Claude Code.
+
+## 📄 Лицензия
+
+Этот проект является учебным примером.
+
+## 🔗 Полезные ссылки
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [WebRTC Documentation](https://webrtc.org/)
+- [Socket.IO Documentation](https://socket.io/docs/)
+- [Docker Documentation](https://docs.docker.com/)
+
+---
+
+**Быстрые ссылки:**
+- 🚀 [Быстрый старт](QUICK_START.md)
+- 🐳 [Docker Guide](DOCKER.md)
+- 📱 [Мобильная настройка](MOBILE_SETUP.md)
+- 🐛 [Отладка](DEBUG.md)

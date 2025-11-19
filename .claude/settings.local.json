@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npm install:*)",
+      "Bash(ipconfig:*)",
+      "Bash(npm run build:*)",
+      "Bash(openssl version:*)",
+      "Bash(openssl req:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(git remote add:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

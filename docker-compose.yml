@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  callme:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: callme-app
+    restart: unless-stopped
+    ports:
+      # Пробрасываем порт 4057 (HTTPS)
+      - "4057:4057"
+    environment:
+      - NODE_ENV=production
+      - PORT=4057
+      - HOSTNAME=0.0.0.0
+    volumes:
+      # Монтируем SSL сертификаты для доступа и обновления
+      - ./ssl:/app/ssl:ro
+    networks:
+      - callme-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('https').get('https://localhost:4057', {rejectUnauthorized: false}, (res) => process.exit(res.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  callme-network:
+    driver: bridge
