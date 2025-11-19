@@ -160,6 +160,15 @@ const ICE_SERVER_CONFIGS = {
       ],
     } as RTCConfiguration,
   },
+  metered: {
+    name: "Metered TURN (20GB бесплатно) ⭐",
+    config: {
+      iceServers: [
+        // Will be loaded dynamically from API
+        { urls: "stun:stun.cloudflare.com:3478" },
+      ],
+    } as RTCConfiguration,
+  },
 };
 
 export default function VideoCall() {
@@ -170,6 +179,7 @@ export default function VideoCall() {
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState<boolean>(false);
   const [selectedRegion, setSelectedRegion] = useState<keyof typeof ICE_SERVER_CONFIGS>("neutral");
+  const [meteredIceServers, setMeteredIceServers] = useState<RTCConfiguration | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -180,7 +190,38 @@ export default function VideoCall() {
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
 
   // Get ICE servers based on selected region
-  const iceServers = ICE_SERVER_CONFIGS[selectedRegion].config;
+  const iceServers = selectedRegion === 'metered' && meteredIceServers
+    ? meteredIceServers
+    : ICE_SERVER_CONFIGS[selectedRegion].config;
+
+  // Debug helper
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    setDebugInfo(prev => [...prev.slice(-50), logMessage]); // Keep last 50 messages
+  };
+
+  // Load Metered.ca TURN credentials
+  useEffect(() => {
+    const loadMeteredCredentials = async () => {
+      try {
+        const response = await fetch('/api/turn-credentials');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch TURN credentials: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setMeteredIceServers(data);
+        addDebugLog('✅ Loaded Metered TURN credentials');
+      } catch (error) {
+        console.error('Failed to load Metered credentials:', error);
+        addDebugLog('⚠️ Failed to load Metered TURN credentials - using fallback');
+      }
+    };
+
+    loadMeteredCredentials();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Проверяем, что мы в браузере
@@ -192,14 +233,6 @@ export default function VideoCall() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Debug helper
-  const addDebugLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logMessage = `[${timestamp}] ${message}`;
-    console.log(logMessage);
-    setDebugInfo(prev => [...prev.slice(-50), logMessage]); // Keep last 50 messages
-  };
 
   const initializeMedia = async () => {
     try {
