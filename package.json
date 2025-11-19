@@ -6,6 +6,7 @@
     "dev": "cross-env PORT=4057 node server.js",
     "build": "next build",
     "start": "cross-env NODE_ENV=production PORT=4057 node server.js",
+    "start:render": "cross-env NODE_ENV=production PORT=10000 HOSTNAME=0.0.0.0 node server-render.js",
     "lint": "eslint",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",

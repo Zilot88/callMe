@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: callme
+    runtime: docker
+    plan: free  # Можно изменить на starter, standard, pro
+    region: oregon  # Можно выбрать: oregon, frankfurt, singapore, ohio
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOSTNAME
+        value: 0.0.0.0
+    healthCheckPath: /
+    autoDeploy: true
