@@ -20,6 +20,8 @@ const ICE_SERVER_CONFIGS = {
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
+        // Cloudflare STUN
+        { urls: "stun:stun.cloudflare.com:3478" },
         // Twilio
         { urls: "stun:global.stun.twilio.com:3478" },
         // European
@@ -28,11 +30,59 @@ const ICE_SERVER_CONFIGS = {
         // VoIP
         { urls: "stun:stun.voiparound.com" },
         { urls: "stun:stun.sipgate.net" },
-        // OpenRelay TURN
+        // FREE TURN servers
         {
-          urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: "turn:freeturn.net:3478",
+          username: "free",
+          credential: "free",
+        },
+        {
+          urls: "turn:freeturn.net:5349",
+          username: "free",
+          credential: "free",
+        },
+      ],
+    } as RTCConfiguration,
+  },
+  neutral: {
+    name: "Нейтральные страны (СНГ рекомендуется)",
+    config: {
+      iceServers: [
+        // Taiwan STUN
+        { urls: "stun:stun1.cht.com.net:3478" },
+        // Japan STUN
+        { urls: "stun:s1.voipstation.jp:3478" },
+        { urls: "stun:s2.voipstation.jp:3478" },
+        // Cloudflare (global, neutral)
+        { urls: "stun:stun.cloudflare.com:3478" },
+        // Neutral VoIP servers
+        { urls: "stun:stun.sipnet.net:3478" },
+        { urls: "stun:stun.voipgate.com:3478" },
+        { urls: "stun:stunserver.org:3478" },
+        // International VoIP
+        { urls: "stun:stun.voiparound.com" },
+        { urls: "stun:stun.voipbuster.com" },
+        { urls: "stun:stun.voipstunt.com" },
+        // FREE TURN servers (не .ru домены!)
+        {
+          urls: "turn:freeturn.net:3478",
+          username: "free",
+          credential: "free",
+        },
+        {
+          urls: "turn:freeturn.net:5349",
+          username: "free",
+          credential: "free",
+        },
+        {
+          urls: "turns:freeturn.net:5349",
+          username: "free",
+          credential: "free",
+        },
+        {
+          urls: "turn:freestun.net:3478",
+          username: "free",
+          credential: "free",
         },
       ],
     } as RTCConfiguration,
@@ -41,6 +91,8 @@ const ICE_SERVER_CONFIGS = {
     name: "Европа (без Google/Twilio)",
     config: {
       iceServers: [
+        // Cloudflare STUN
+        { urls: "stun:stun.cloudflare.com:3478" },
         // European STUN
         { urls: "stun:stun.ekiga.net" },
         { urls: "stun:stun.ideasip.com" },
@@ -50,39 +102,49 @@ const ICE_SERVER_CONFIGS = {
         { urls: "stun:stun.voipbuster.com" },
         { urls: "stun:stun.sipgate.net" },
         { urls: "stun:stun.stunprotocol.org:3478" },
-        // OpenRelay TURN
+        // FREE TURN servers
         {
-          urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: "turn:freeturn.net:3478",
+          username: "free",
+          credential: "free",
         },
         {
-          urls: "turn:openrelay.metered.ca:443",
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: "turn:freeturn.net:5349",
+          username: "free",
+          credential: "free",
+        },
+        {
+          urls: "turns:freeturn.net:5349",
+          username: "free",
+          credential: "free",
         },
       ],
     } as RTCConfiguration,
   },
-  minimal: {
-    name: "Минимальный (только TURN)",
+  turnOnly: {
+    name: "Только TURN (максимальная совместимость)",
     config: {
       iceServers: [
-        // Only TURN for strict firewalls
+        // FREE TURN servers - multiple for failover
         {
-          urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: "turn:freeturn.net:3478",
+          username: "free",
+          credential: "free",
         },
         {
-          urls: "turn:openrelay.metered.ca:443",
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: "turn:freeturn.net:5349",
+          username: "free",
+          credential: "free",
         },
         {
-          urls: "turn:openrelay.metered.ca:443?transport=tcp",
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: "turns:freeturn.net:5349",
+          username: "free",
+          credential: "free",
+        },
+        {
+          urls: "turn:freestun.net:3478",
+          username: "free",
+          credential: "free",
         },
       ],
     } as RTCConfiguration,
@@ -96,7 +158,7 @@ export default function VideoCall() {
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState<boolean>(false);
-  const [selectedRegion, setSelectedRegion] = useState<keyof typeof ICE_SERVER_CONFIGS>("global");
+  const [selectedRegion, setSelectedRegion] = useState<keyof typeof ICE_SERVER_CONFIGS>("neutral");
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
