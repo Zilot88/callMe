@@ -10,6 +10,85 @@ interface PeerConnection {
   stream?: MediaStream;
 }
 
+// ICE Server configurations for different regions
+const ICE_SERVER_CONFIGS = {
+  global: {
+    name: "Глобальные (все серверы)",
+    config: {
+      iceServers: [
+        // Google STUN
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        // Twilio
+        { urls: "stun:global.stun.twilio.com:3478" },
+        // European
+        { urls: "stun:stun.ekiga.net" },
+        { urls: "stun:stun.schlund.de" },
+        // VoIP
+        { urls: "stun:stun.voiparound.com" },
+        { urls: "stun:stun.sipgate.net" },
+        // OpenRelay TURN
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+      ],
+    } as RTCConfiguration,
+  },
+  europe: {
+    name: "Европа (без Google/Twilio)",
+    config: {
+      iceServers: [
+        // European STUN
+        { urls: "stun:stun.ekiga.net" },
+        { urls: "stun:stun.ideasip.com" },
+        { urls: "stun:stun.schlund.de" },
+        // VoIP (Europe)
+        { urls: "stun:stun.voiparound.com" },
+        { urls: "stun:stun.voipbuster.com" },
+        { urls: "stun:stun.sipgate.net" },
+        { urls: "stun:stun.stunprotocol.org:3478" },
+        // OpenRelay TURN
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+      ],
+    } as RTCConfiguration,
+  },
+  minimal: {
+    name: "Минимальный (только TURN)",
+    config: {
+      iceServers: [
+        // Only TURN for strict firewalls
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443?transport=tcp",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+      ],
+    } as RTCConfiguration,
+  },
+};
+
 export default function VideoCall() {
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
@@ -17,6 +96,7 @@ export default function VideoCall() {
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState<boolean>(false);
+  const [selectedRegion, setSelectedRegion] = useState<keyof typeof ICE_SERVER_CONFIGS>("global");
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -26,52 +106,8 @@ export default function VideoCall() {
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
 
-  // ICE серверы для WebRTC (STUN + TURN)
-  // Используем множество серверов из разных регионов для надежности
-  const iceServers: RTCConfiguration = {
-    iceServers: [
-      // Google STUN (США, глобальный)
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      { urls: "stun:stun2.l.google.com:19302" },
-      { urls: "stun:stun3.l.google.com:19302" },
-      { urls: "stun:stun4.l.google.com:19302" },
-
-      // Twilio STUN (глобальный)
-      { urls: "stun:global.stun.twilio.com:3478" },
-
-      // OpenRelay STUN (Канада)
-      { urls: "stun:openrelay.metered.ca:80" },
-
-      // Европейские STUN серверы
-      { urls: "stun:stun.ekiga.net" },
-      { urls: "stun:stun.ideasip.com" },
-      { urls: "stun:stun.schlund.de" },
-
-      // Дополнительные публичные STUN
-      { urls: "stun:stun.voiparound.com" },
-      { urls: "stun:stun.voipbuster.com" },
-      { urls: "stun:stun.voipstunt.com" },
-      { urls: "stun:stun.sipgate.net" },
-      { urls: "stun:stun.stunprotocol.org:3478" },
-
-      {
-        urls: "turn:openrelay.metered.ca:80",
-        username: "openrelayproject",
-        credential: "openrelayproject",
-      },
-      {
-        urls: "turn:openrelay.metered.ca:443",
-        username: "openrelayproject",
-        credential: "openrelayproject",
-      },
-      {
-        urls: "turn:openrelay.metered.ca:443?transport=tcp",
-        username: "openrelayproject",
-        credential: "openrelayproject",
-      },
-    ],
-  };
+  // Get ICE servers based on selected region
+  const iceServers = ICE_SERVER_CONFIGS[selectedRegion].config;
 
   useEffect(() => {
     // Проверяем, что мы в браузере
@@ -489,8 +525,31 @@ export default function VideoCall() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Кнопка запроса разрешений */}
-        <div className="flex justify-center mb-4">
+        {/* Кнопки управления и настройки */}
+        <div className="flex flex-col sm:flex-row justify-center gap-4 mb-4">
+          {/* Region Selector */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              🌍 Регион серверов:
+            </label>
+            <select
+              value={selectedRegion}
+              onChange={(e) => {
+                const newRegion = e.target.value as keyof typeof ICE_SERVER_CONFIGS;
+                setSelectedRegion(newRegion);
+                addDebugLog(`🌍 Changed ICE servers to: ${ICE_SERVER_CONFIGS[newRegion].name}`);
+              }}
+              className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg shadow-sm hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {Object.entries(ICE_SERVER_CONFIGS).map(([key, value]) => (
+                <option key={key} value={key}>
+                  {value.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Кнопка запроса разрешений */}
           <button
             onClick={requestMediaPermissions}
             className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
