@@ -23,11 +23,50 @@ export default function VideoCall() {
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
 
-  // ICE серверы для WebRTC
-  const iceServers = {
+  // ICE серверы для WebRTC (STUN + TURN)
+  // Используем множество серверов из разных регионов для надежности
+  const iceServers: RTCConfiguration = {
     iceServers: [
+      // Google STUN (США, глобальный)
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun2.l.google.com:19302" },
+      { urls: "stun:stun3.l.google.com:19302" },
+      { urls: "stun:stun4.l.google.com:19302" },
+
+      // Twilio STUN (глобальный)
+      { urls: "stun:global.stun.twilio.com:3478" },
+
+      // OpenRelay STUN (Канада)
+      { urls: "stun:openrelay.metered.ca:80" },
+
+      // Европейские STUN серверы
+      { urls: "stun:stun.ekiga.net" },
+      { urls: "stun:stun.ideasip.com" },
+      { urls: "stun:stun.schlund.de" },
+
+      // Дополнительные публичные STUN
+      { urls: "stun:stun.voiparound.com" },
+      { urls: "stun:stun.voipbuster.com" },
+      { urls: "stun:stun.voipstunt.com" },
+      { urls: "stun:stun.sipgate.net" },
+      { urls: "stun:stun.stunprotocol.org:3478" },
+
+      {
+        urls: "turn:openrelay.metered.ca:80",
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
+      {
+        urls: "turn:openrelay.metered.ca:443",
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
+      {
+        urls: "turn:openrelay.metered.ca:443?transport=tcp",
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
     ],
   };
 
@@ -338,9 +377,101 @@ export default function VideoCall() {
     window.location.href = "/";
   };
 
+  const requestMediaPermissions = async () => {
+    try {
+      console.log("Перезапрос доступа к камере и микрофону...");
+      setConnectionStatus("Запрос разрешений...");
+
+      // Останавливаем старые треки
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => {
+          console.log(`Stopping old track: ${track.kind}`);
+          track.stop();
+        });
+      }
+
+      // Запрашиваем новый доступ
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      console.log("Новый доступ получен", newStream);
+
+      localStreamRef.current = newStream;
+
+      // Обновляем локальное видео
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = newStream;
+      }
+
+      // Обновляем состояние кнопок
+      const audioTrack = newStream.getAudioTracks()[0];
+      const videoTrack = newStream.getVideoTracks()[0];
+      setIsAudioEnabled(audioTrack?.enabled ?? true);
+      setIsVideoEnabled(videoTrack?.enabled ?? true);
+
+      // Заменяем треки во всех активных peer connections
+      const audioTracks = newStream.getAudioTracks();
+      const videoTracks = newStream.getVideoTracks();
+
+      peersRef.current.forEach((peer, userId) => {
+        console.log(`Обновление треков для пира ${userId}`);
+
+        // Находим и заменяем аудио треки
+        const audioSenders = peer.connection.getSenders().filter(s => s.track?.kind === 'audio');
+        audioSenders.forEach((sender, index) => {
+          if (audioTracks[index]) {
+            sender.replaceTrack(audioTracks[index]);
+            console.log(`Аудио трек заменен для ${userId}`);
+          }
+        });
+
+        // Находим и заменяем видео треки
+        const videoSenders = peer.connection.getSenders().filter(s => s.track?.kind === 'video');
+        videoSenders.forEach((sender, index) => {
+          if (videoTracks[index]) {
+            sender.replaceTrack(videoTracks[index]);
+            console.log(`Видео трек заменен для ${userId}`);
+          }
+        });
+      });
+
+      setConnectionStatus(peersRef.current.size > 0 ? "Подключено" : "Ожидание участников...");
+      console.log("✅ Разрешения успешно обновлены");
+    } catch (error) {
+      console.error("❌ Ошибка при запросе разрешений:", error);
+      setConnectionStatus("Ошибка доступа к медиа");
+      alert("Не удалось получить доступ к камере или микрофону. Проверьте настройки браузера.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-8">
       <div className="max-w-7xl mx-auto">
+        {/* Кнопка запроса разрешений */}
+        <div className="flex justify-center mb-4">
+          <button
+            onClick={requestMediaPermissions}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+            title="Перезапросить доступ к камере и микрофону"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M23 4v6h-6" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            Запросить доступ к камере/микрофону
+          </button>
+        </div>
+
         <h1 className="text-4xl font-bold text-center mb-2 text-gray-800 dark:text-white">
           Общая конференция
         </h1>
