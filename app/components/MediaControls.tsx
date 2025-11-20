@@ -7,6 +7,9 @@ interface MediaControlsProps {
   onToggleVideo: () => void;
   onEndCall: () => void;
   isCallActive: boolean;
+  hideMyVideo?: boolean;
+  onToggleHideMyVideo?: () => void;
+  participantCount?: number;
 }
 
 export default function MediaControls({
@@ -16,47 +19,78 @@ export default function MediaControls({
   onToggleVideo,
   onEndCall,
   isCallActive,
+  hideMyVideo = false,
+  onToggleHideMyVideo,
+  participantCount = 1,
 }: MediaControlsProps) {
   return (
-    <div className="flex gap-4 justify-center items-center p-4">
+    <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center p-3 sm:p-4">
+      {/* Кнопка микрофона */}
       <button
         onClick={onToggleAudio}
         disabled={!isCallActive}
-        className={`px-6 py-3 rounded-full font-medium transition-colors ${
+        className={`px-3 sm:px-5 py-2 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${
           isCallActive
             ? isAudioEnabled
-              ? "bg-blue-500 hover:bg-blue-600 text-white"
-              : "bg-red-500 hover:bg-red-600 text-white"
+              ? "bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:scale-105"
+              : "bg-red-500 hover:bg-red-600 text-white shadow-lg hover:scale-105"
             : "bg-gray-300 text-gray-500 cursor-not-allowed"
         }`}
+        title={isAudioEnabled ? "Выключить микрофон" : "Включить микрофон"}
       >
-        {isAudioEnabled ? "🎤 Микрофон вкл" : "🎤 Микрофон выкл"}
+        <span className="hidden sm:inline">{isAudioEnabled ? "🎤 Микрофон" : "🎤 Выкл"}</span>
+        <span className="sm:hidden">🎤</span>
       </button>
 
+      {/* Кнопка камеры */}
       <button
         onClick={onToggleVideo}
         disabled={!isCallActive}
-        className={`px-6 py-3 rounded-full font-medium transition-colors ${
+        className={`px-3 sm:px-5 py-2 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${
           isCallActive
             ? isVideoEnabled
-              ? "bg-blue-500 hover:bg-blue-600 text-white"
-              : "bg-red-500 hover:bg-red-600 text-white"
+              ? "bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:scale-105"
+              : "bg-red-500 hover:bg-red-600 text-white shadow-lg hover:scale-105"
             : "bg-gray-300 text-gray-500 cursor-not-allowed"
         }`}
+        title={isVideoEnabled ? "Выключить камеру" : "Включить камеру"}
       >
-        {isVideoEnabled ? "📹 Камера вкл" : "📹 Камера выкл"}
+        <span className="hidden sm:inline">{isVideoEnabled ? "📹 Камера" : "📹 Выкл"}</span>
+        <span className="sm:hidden">📹</span>
       </button>
 
+      {/* Кнопка "Скрыть себя" - показывается только если есть другие участники */}
+      {participantCount > 1 && onToggleHideMyVideo && (
+        <button
+          onClick={onToggleHideMyVideo}
+          disabled={!isCallActive}
+          className={`px-3 sm:px-5 py-2 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${
+            isCallActive
+              ? hideMyVideo
+                ? "bg-gray-600 hover:bg-gray-700 text-white shadow-lg hover:scale-105"
+                : "bg-purple-500 hover:bg-purple-600 text-white shadow-lg hover:scale-105"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+          }`}
+          title={hideMyVideo ? "Показать своё видео" : "Скрыть своё видео"}
+        >
+          <span className="hidden sm:inline">{hideMyVideo ? "👁️ Показать себя" : "👁️‍🗨️ Скрыть себя"}</span>
+          <span className="sm:hidden">{hideMyVideo ? "👁️" : "👁️‍🗨️"}</span>
+        </button>
+      )}
+
+      {/* Кнопка завершения звонка */}
       <button
         onClick={onEndCall}
         disabled={!isCallActive}
-        className={`px-6 py-3 rounded-full font-medium transition-colors ${
+        className={`px-3 sm:px-5 py-2 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${
           isCallActive
-            ? "bg-red-600 hover:bg-red-700 text-white"
+            ? "bg-red-600 hover:bg-red-700 text-white shadow-lg hover:scale-105"
             : "bg-gray-300 text-gray-500 cursor-not-allowed"
         }`}
+        title="Завершить звонок"
       >
-        📞 Завершить звонок
+        <span className="hidden sm:inline">📞 Завершить</span>
+        <span className="sm:hidden">📞</span>
       </button>
     </div>
   );

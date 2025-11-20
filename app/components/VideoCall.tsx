@@ -13,7 +13,7 @@ interface PeerConnection {
 // ICE Server configurations for different regions
 const ICE_SERVER_CONFIGS = {
   global: {
-    name: "Глобальные (все серверы)",
+    name: "🌐 Глобальные",
     config: {
       iceServers: [
         // Google STUN
@@ -45,7 +45,7 @@ const ICE_SERVER_CONFIGS = {
     } as RTCConfiguration,
   },
   neutral: {
-    name: "Нейтральные страны (СНГ рекомендуется)",
+    name: "🌏 Нейтральные",
     config: {
       iceServers: [
         // Taiwan STUN
@@ -88,7 +88,7 @@ const ICE_SERVER_CONFIGS = {
     } as RTCConfiguration,
   },
   europe: {
-    name: "Европа (без Google/Twilio)",
+    name: "🇪🇺 Европа",
     config: {
       iceServers: [
         // Cloudflare STUN
@@ -122,7 +122,7 @@ const ICE_SERVER_CONFIGS = {
     } as RTCConfiguration,
   },
   turnOnly: {
-    name: "Только TURN (максимальная совместимость)",
+    name: "🔒 Только TURN",
     config: {
       iceServers: [
         // Numb TURN (popular but sometimes unreliable)
@@ -161,7 +161,7 @@ const ICE_SERVER_CONFIGS = {
     } as RTCConfiguration,
   },
   metered: {
-    name: "Metered TURN (20GB бесплатно) ⭐",
+    name: "⭐ Metered (20GB)",
     config: {
       iceServers: [
         // Will be loaded dynamically from API
@@ -178,8 +178,9 @@ export default function VideoCall() {
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState<boolean>(false);
-  const [selectedRegion, setSelectedRegion] = useState<keyof typeof ICE_SERVER_CONFIGS>("neutral");
+  const [selectedRegion, setSelectedRegion] = useState<keyof typeof ICE_SERVER_CONFIGS>("metered");
   const [meteredIceServers, setMeteredIceServers] = useState<RTCConfiguration | null>(null);
+  const [hideMyVideo, setHideMyVideo] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -499,7 +500,7 @@ export default function VideoCall() {
     if (!videoElement && remoteVideoContainerRef.current) {
       // Создаем новый видео элемент
       const container = document.createElement("div");
-      container.className = "relative bg-black rounded-lg overflow-hidden shadow-lg aspect-video";
+      container.className = "relative bg-black rounded-lg overflow-hidden shadow-xl";
       container.id = `peer-${userId}`;
 
       videoElement = document.createElement("video");
@@ -509,7 +510,13 @@ export default function VideoCall() {
       videoElement.className = "w-full h-full object-cover";
       videoElement.srcObject = stream;
 
+      // Добавляем label с именем участника
+      const label = document.createElement("div");
+      label.className = "absolute bottom-2 left-2 bg-purple-600 text-white px-2 py-1 rounded text-xs sm:text-sm font-semibold";
+      label.textContent = `Участник ${userId.substring(0, 4)}`;
+
       container.appendChild(videoElement);
+      container.appendChild(label);
       remoteVideoContainerRef.current.appendChild(container);
       remoteVideosRef.current.set(userId, videoElement);
       console.log("Created video element for user:", userId);
@@ -673,76 +680,94 @@ export default function VideoCall() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Кнопки управления и настройки */}
-        <div className="flex flex-col sm:flex-row justify-center gap-4 mb-4">
-          {/* Region Selector */}
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              🌍 Регион серверов:
-            </label>
-            <select
-              value={selectedRegion}
-              onChange={(e) => {
-                const newRegion = e.target.value as keyof typeof ICE_SERVER_CONFIGS;
-                setSelectedRegion(newRegion);
-                addDebugLog(`🌍 Changed ICE servers to: ${ICE_SERVER_CONFIGS[newRegion].name}`);
-                // Reconnect all peers with new ICE servers
-                setTimeout(() => reconnectAllPeers(), 100);
-              }}
-              className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg shadow-sm hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {Object.entries(ICE_SERVER_CONFIGS).map(([key, value]) => (
-                <option key={key} value={key}>
-                  {value.name}
-                </option>
-              ))}
-            </select>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+      {/* Sticky Header с управлением */}
+      <div className="sticky top-0 z-50 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2">
+          {/* Заголовок и статус */}
+          <div className="text-center mb-2">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
+              Видеоконференция
+              <span className="ml-2 sm:ml-3 text-sm sm:text-base font-normal text-gray-600 dark:text-gray-400">
+                ({participantCount} {participantCount === 1 ? 'участник' : participantCount < 5 ? 'участника' : 'участников'})
+              </span>
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {connectionStatus}
+            </p>
           </div>
 
-          {/* Кнопка запроса разрешений */}
-          <button
-            onClick={requestMediaPermissions}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
-            title="Перезапросить доступ к камере и микрофону"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          {/* Элементы управления */}
+          <MediaControls
+            isAudioEnabled={isAudioEnabled}
+            isVideoEnabled={isVideoEnabled}
+            onToggleAudio={toggleAudio}
+            onToggleVideo={toggleVideo}
+            onEndCall={endCall}
+            isCallActive={true}
+            hideMyVideo={hideMyVideo}
+            onToggleHideMyVideo={() => setHideMyVideo(!hideMyVideo)}
+            participantCount={participantCount}
+          />
+
+          {/* Настройки в одну строку */}
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-4 mt-2 pb-2">
+            {/* Region Selector */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                🌍 Серверы:
+              </label>
+              <select
+                value={selectedRegion}
+                onChange={(e) => {
+                  const newRegion = e.target.value as keyof typeof ICE_SERVER_CONFIGS;
+                  setSelectedRegion(newRegion);
+                  addDebugLog(`🌍 Changed ICE servers to: ${ICE_SERVER_CONFIGS[newRegion].name}`);
+                  setTimeout(() => reconnectAllPeers(), 100);
+                }}
+                className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg shadow-sm hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {Object.entries(ICE_SERVER_CONFIGS).map(([key, value]) => (
+                  <option key={key} value={key}>
+                    {value.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Кнопка запроса разрешений */}
+            <button
+              onClick={requestMediaPermissions}
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
+              title="Перезапросить доступ к камере и микрофону"
             >
-              <path d="M23 4v6h-6" />
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-            </svg>
-            Запросить доступ к камере/микрофону
-          </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-3 w-3 sm:h-4 sm:w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M23 4v6h-6" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              <span className="hidden sm:inline">Запросить доступ</span>
+              <span className="sm:hidden">Доступ</span>
+            </button>
+          </div>
         </div>
+      </div>
 
-        <h1 className="text-4xl font-bold text-center mb-2 text-gray-800 dark:text-white">
-          Общая конференция
-        </h1>
-        <p className="text-center text-gray-600 dark:text-gray-300 mb-2">
-          Статус: <span className="font-semibold">{connectionStatus}</span>
-        </p>
-        <p className="text-center text-gray-600 dark:text-gray-300 mb-8">
-          Участников: <span className="font-semibold text-blue-600 dark:text-blue-400">{participantCount}</span>
-        </p>
-
-        {/* Видео блок */}
-        <div className="mb-8">
-          {/* Локальное видео */}
-          <div className="mb-6">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-w-md mx-auto">
-              <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 border-b border-gray-200 dark:border-gray-600">
-                <h3 className="font-semibold text-gray-800 dark:text-white">Вы</h3>
-              </div>
-              <div className="relative bg-black aspect-video">
+      {/* Контейнер видео на весь экран с отступами */}
+      <div className="h-[calc(100vh-180px)] sm:h-[calc(100vh-200px)] p-2 sm:p-4 md:p-6">
+        {participantCount === 1 ? (
+          /* Пока нет других участников - показываем большое локальное видео */
+          <div className="h-full flex flex-col items-center justify-center gap-4">
+            <div className="w-full max-w-3xl">
+              <div className="relative bg-black rounded-lg overflow-hidden shadow-2xl aspect-video">
                 <video
                   ref={localVideoRef}
                   autoPlay
@@ -752,48 +777,66 @@ export default function VideoCall() {
                 />
                 {!isVideoEnabled && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                    <p className="text-white text-lg">Камера выключена</p>
+                    <p className="text-white text-lg sm:text-xl">Камера выключена</p>
                   </div>
                 )}
+                <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 bg-black/70 text-white px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold">
+                  Вы
+                </div>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="text-gray-600 dark:text-gray-400 text-base sm:text-lg font-medium">
+                Ожидание других участников...
+              </p>
+              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm mt-2">
+                Поделитесь ссылкой на эту страницу
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* Есть другие участники - показываем сетку */
+          <div className="h-full w-full">
+            <div className={`grid gap-2 sm:gap-3 md:gap-4 h-full ${
+              participantCount === 2
+                ? 'grid-cols-1 sm:grid-cols-2'
+                : participantCount === 3
+                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                : participantCount === 4
+                ? 'grid-cols-2'
+                : 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            }`}>
+              {/* Локальное видео - скрываем если hideMyVideo === true */}
+              {!hideMyVideo && (
+                <div className="relative bg-black rounded-lg overflow-hidden shadow-xl">
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  {!isVideoEnabled && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                      <p className="text-white text-sm sm:text-base">Камера выключена</p>
+                    </div>
+                  )}
+                  <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs sm:text-sm font-semibold">
+                    Вы
+                  </div>
+                </div>
+              )}
+
+              {/* Контейнер для удаленных видео */}
+              <div
+                ref={remoteVideoContainerRef}
+                className={`contents ${hideMyVideo ? 'col-span-full' : ''}`}
+              >
+                {/* Видео элементы других участников будут добавлены динамически */}
               </div>
             </div>
           </div>
-
-          {/* Удаленные видео */}
-          <div>
-            <h3 className="text-2xl font-bold text-center mb-4 text-gray-800 dark:text-white">
-              Другие участники
-            </h3>
-            <div
-              ref={remoteVideoContainerRef}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-            >
-              {/* Видео элементы будут добавлены динамически */}
-            </div>
-            {participantCount === 1 && (
-              <div className="text-center py-12">
-                <p className="text-gray-500 dark:text-gray-400 text-lg">
-                  Ожидание других участников...
-                </p>
-                <p className="text-gray-400 dark:text-gray-500 text-sm mt-2">
-                  Поделитесь ссылкой на эту страницу с другими пользователями
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Элементы управления */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-          <MediaControls
-            isAudioEnabled={isAudioEnabled}
-            isVideoEnabled={isVideoEnabled}
-            onToggleAudio={toggleAudio}
-            onToggleVideo={toggleVideo}
-            onEndCall={endCall}
-            isCallActive={true}
-          />
-        </div>
+        )}
       </div>
 
       {/* Debug Panel */}
