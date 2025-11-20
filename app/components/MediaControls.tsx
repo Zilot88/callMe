@@ -24,12 +24,12 @@ export default function MediaControls({
   participantCount = 1,
 }: MediaControlsProps) {
   return (
-    <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center p-3 sm:p-4">
+    <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center p-2 sm:p-4">
       {/* Кнопка микрофона */}
       <button
         onClick={onToggleAudio}
         disabled={!isCallActive}
-        className={`px-3 sm:px-5 py-2 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${
+        className={`flex-1 min-w-[80px] sm:flex-none px-4 sm:px-5 py-3 sm:py-3 rounded-full font-medium text-base sm:text-base transition-all ${
           isCallActive
             ? isAudioEnabled
               ? "bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:scale-105"
@@ -39,14 +39,14 @@ export default function MediaControls({
         title={isAudioEnabled ? "Выключить микрофон" : "Включить микрофон"}
       >
         <span className="hidden sm:inline">{isAudioEnabled ? "🎤 Микрофон" : "🎤 Выкл"}</span>
-        <span className="sm:hidden">🎤</span>
+        <span className="sm:hidden text-xl">🎤</span>
       </button>
 
       {/* Кнопка камеры */}
       <button
         onClick={onToggleVideo}
         disabled={!isCallActive}
-        className={`px-3 sm:px-5 py-2 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${
+        className={`flex-1 min-w-[80px] sm:flex-none px-4 sm:px-5 py-3 sm:py-3 rounded-full font-medium text-base sm:text-base transition-all ${
           isCallActive
             ? isVideoEnabled
               ? "bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:scale-105"
@@ -56,7 +56,7 @@ export default function MediaControls({
         title={isVideoEnabled ? "Выключить камеру" : "Включить камеру"}
       >
         <span className="hidden sm:inline">{isVideoEnabled ? "📹 Камера" : "📹 Выкл"}</span>
-        <span className="sm:hidden">📹</span>
+        <span className="sm:hidden text-xl">📹</span>
       </button>
 
       {/* Кнопка "Скрыть себя" - показывается только если есть другие участники */}
@@ -64,7 +64,7 @@ export default function MediaControls({
         <button
           onClick={onToggleHideMyVideo}
           disabled={!isCallActive}
-          className={`px-3 sm:px-5 py-2 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${
+          className={`flex-1 min-w-[80px] sm:flex-none px-4 sm:px-5 py-3 sm:py-3 rounded-full font-medium text-base sm:text-base transition-all ${
             isCallActive
               ? hideMyVideo
                 ? "bg-gray-600 hover:bg-gray-700 text-white shadow-lg hover:scale-105"
@@ -74,7 +74,7 @@ export default function MediaControls({
           title={hideMyVideo ? "Показать своё видео" : "Скрыть своё видео"}
         >
           <span className="hidden sm:inline">{hideMyVideo ? "👁️ Показать себя" : "👁️‍🗨️ Скрыть себя"}</span>
-          <span className="sm:hidden">{hideMyVideo ? "👁️" : "👁️‍🗨️"}</span>
+          <span className="sm:hidden text-xl">{hideMyVideo ? "👁️" : "👁️‍🗨️"}</span>
         </button>
       )}
 
@@ -82,7 +82,7 @@ export default function MediaControls({
       <button
         onClick={onEndCall}
         disabled={!isCallActive}
-        className={`px-3 sm:px-5 py-2 sm:py-3 rounded-full font-medium text-sm sm:text-base transition-all ${
+        className={`flex-1 min-w-[80px] sm:flex-none px-4 sm:px-5 py-3 sm:py-3 rounded-full font-medium text-base sm:text-base transition-all ${
           isCallActive
             ? "bg-red-600 hover:bg-red-700 text-white shadow-lg hover:scale-105"
             : "bg-gray-300 text-gray-500 cursor-not-allowed"
@@ -90,7 +90,7 @@ export default function MediaControls({
         title="Завершить звонок"
       >
         <span className="hidden sm:inline">📞 Завершить</span>
-        <span className="sm:hidden">📞</span>
+        <span className="sm:hidden text-xl">📞</span>
       </button>
     </div>
   );

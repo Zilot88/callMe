@@ -690,26 +690,25 @@ export default function VideoCall() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Debug Button - Top Left Corner */}
-      <button
-        onClick={() => setShowDebug(!showDebug)}
-        className="fixed top-4 left-4 z-50 p-3 bg-gray-800 hover:bg-gray-900 text-white rounded-full shadow-lg transition-all hover:scale-110"
-        title="Открыть Debug логи"
-      >
-        <span className="text-2xl">🐛</span>
-      </button>
-
       {/* Top Header - Title and Settings */}
       <div className="sticky top-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 py-3">
-          {/* Статус */}
-          <div className="text-center mb-3">
+          {/* Статус с кнопкой Debug */}
+          <div className="flex items-center justify-center gap-3 mb-3">
             <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 font-medium">
               {connectionStatus}
               <span className="ml-2 text-xs sm:text-sm font-normal text-gray-600 dark:text-gray-400">
                 ({participantCount} {participantCount === 1 ? 'участник' : participantCount < 5 ? 'участника' : 'участников'})
               </span>
             </p>
+            {/* Debug Button */}
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-all hover:scale-110"
+              title={showDebug ? "Скрыть Debug логи" : "Показать Debug логи"}
+            >
+              <span className="text-lg">🕷️</span>
+            </button>
           </div>
 
           {/* Настройки в одну строку - 50% на 50% */}
