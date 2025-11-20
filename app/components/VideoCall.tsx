@@ -195,6 +195,15 @@ export default function VideoCall() {
     ? meteredIceServers
     : ICE_SERVER_CONFIGS[selectedRegion].config;
 
+  // Auto-hide my video when exactly 2 participants
+  useEffect(() => {
+    if (participantCount === 2) {
+      setHideMyVideo(true);
+    } else if (participantCount > 2) {
+      setHideMyVideo(false);
+    }
+  }, [participantCount]);
+
   // Debug helper
   const addDebugLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -681,41 +690,34 @@ export default function VideoCall() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Sticky Header с управлением */}
-      <div className="sticky top-0 z-50 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2">
-          {/* Заголовок и статус */}
-          <div className="text-center mb-2">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">
-              Видеоконференция
-              <span className="ml-2 sm:ml-3 text-sm sm:text-base font-normal text-gray-600 dark:text-gray-400">
+      {/* Debug Button - Top Left Corner */}
+      <button
+        onClick={() => setShowDebug(!showDebug)}
+        className="fixed top-4 left-4 z-50 p-3 bg-gray-800 hover:bg-gray-900 text-white rounded-full shadow-lg transition-all hover:scale-110"
+        title="Открыть Debug логи"
+      >
+        <span className="text-2xl">🐛</span>
+      </button>
+
+      {/* Top Header - Title and Settings */}
+      <div className="sticky top-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 py-3">
+          {/* Статус */}
+          <div className="text-center mb-3">
+            <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 font-medium">
+              {connectionStatus}
+              <span className="ml-2 text-xs sm:text-sm font-normal text-gray-600 dark:text-gray-400">
                 ({participantCount} {participantCount === 1 ? 'участник' : participantCount < 5 ? 'участника' : 'участников'})
               </span>
-            </h1>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
-              {connectionStatus}
             </p>
           </div>
 
-          {/* Элементы управления */}
-          <MediaControls
-            isAudioEnabled={isAudioEnabled}
-            isVideoEnabled={isVideoEnabled}
-            onToggleAudio={toggleAudio}
-            onToggleVideo={toggleVideo}
-            onEndCall={endCall}
-            isCallActive={true}
-            hideMyVideo={hideMyVideo}
-            onToggleHideMyVideo={() => setHideMyVideo(!hideMyVideo)}
-            participantCount={participantCount}
-          />
-
-          {/* Настройки в одну строку */}
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-4 mt-2 pb-2">
-            {/* Region Selector */}
-            <div className="flex items-center gap-2">
+          {/* Настройки в одну строку - 50% на 50% */}
+          <div className="flex gap-2 max-w-4xl mx-auto">
+            {/* Region Selector - 50% */}
+            <div className="flex-1 flex items-center gap-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 shadow-sm">
               <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                🌍 Серверы:
+                🌍
               </label>
               <select
                 value={selectedRegion}
@@ -725,7 +727,7 @@ export default function VideoCall() {
                   addDebugLog(`🌍 Changed ICE servers to: ${ICE_SERVER_CONFIGS[newRegion].name}`);
                   setTimeout(() => reconnectAllPeers(), 100);
                 }}
-                className="px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg shadow-sm hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 bg-transparent text-xs sm:text-sm text-gray-900 dark:text-white focus:outline-none"
               >
                 {Object.entries(ICE_SERVER_CONFIGS).map(([key, value]) => (
                   <option key={key} value={key}>
@@ -735,10 +737,10 @@ export default function VideoCall() {
               </select>
             </div>
 
-            {/* Кнопка запроса разрешений */}
+            {/* Кнопка запроса разрешений - 50% */}
             <button
               onClick={requestMediaPermissions}
-              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
+              className="flex-1 flex items-center justify-center gap-1 sm:gap-2 px-2 py-2 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
               title="Перезапросить доступ к камере и микрофону"
             >
               <svg
@@ -755,14 +757,14 @@ export default function VideoCall() {
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
               </svg>
               <span className="hidden sm:inline">Запросить доступ</span>
-              <span className="sm:hidden">Доступ</span>
+              <span className="sm:hidden">🎥🎤</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Контейнер видео на весь экран с отступами */}
-      <div className="h-[calc(100vh-180px)] sm:h-[calc(100vh-200px)] p-2 sm:p-4 md:p-6">
+      <div className="h-[calc(100vh-140px)] sm:h-[calc(100vh-160px)] p-2 sm:p-4 md:p-6 pb-20 sm:pb-24">
         {participantCount === 1 ? (
           /* Пока нет других участников - показываем большое локальное видео */
           <div className="h-full flex flex-col items-center justify-center gap-4">
@@ -837,6 +839,21 @@ export default function VideoCall() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Bottom Footer - MediaControls */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-t border-gray-200 dark:border-gray-700">
+        <MediaControls
+          isAudioEnabled={isAudioEnabled}
+          isVideoEnabled={isVideoEnabled}
+          onToggleAudio={toggleAudio}
+          onToggleVideo={toggleVideo}
+          onEndCall={endCall}
+          isCallActive={true}
+          hideMyVideo={hideMyVideo}
+          onToggleHideMyVideo={() => setHideMyVideo(!hideMyVideo)}
+          participantCount={participantCount}
+        />
       </div>
 
       {/* Debug Panel */}
