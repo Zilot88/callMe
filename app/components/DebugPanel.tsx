@@ -34,25 +34,6 @@ export default function DebugPanel({ logs, isOpen, onToggle }: DebugPanelProps) 
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      {/* Toggle Button */}
-      <button
-        onClick={onToggle}
-        className="mb-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg shadow-lg flex items-center gap-2"
-        title="Показать/скрыть debug панель"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-        Debug Logs ({logs.length})
-      </button>
-
       {/* Debug Panel */}
       {isOpen && (
         <div className="bg-gray-900 text-gray-100 rounded-lg shadow-2xl w-[600px] max-h-[500px] flex flex-col">
