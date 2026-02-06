@@ -11,7 +11,16 @@
       "Bash(docker-compose:*)",
       "Bash(git remote add:*)",
       "Bash(cat:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Implement P2P video conferencing with WebRTC and Docker support\n\nMajor features:\n- Auto-join video conferencing (no IDs needed)\n- WebRTC P2P mesh topology with Socket.IO signaling\n- HTTPS support with self-signed SSL certificates\n- Mobile device support (iOS & Android)\n- Docker deployment with docker-compose\n- Comprehensive documentation\n\nComponents:\n- Custom HTTPS server with Socket.IO (server.js)\n- VideoCall component with WebRTC logic\n- MediaControls for audio/video toggle\n- Responsive UI with Tailwind CSS 4\n\nTech stack:\n- Next.js 16 + React 19 + TypeScript\n- Socket.IO for WebRTC signaling\n- Native WebRTC API (RTCPeerConnection)\n- Tailwind CSS 4 with inline theme\n- Docker & docker-compose for deployment\n\nDeployment:\n- Port 4057 (HTTPS)\n- SSL certificates in ssl/ directory\n- Docker ready with health checks\n- DMZ configured for external access\n\nDocumentation:\n- QUICK_START.md - Quick start guide\n- DOCKER.md - Complete Docker deployment guide\n- MOBILE_SETUP.md - Mobile device setup instructions\n- DEBUG.md - Troubleshooting and debugging guide\n- IMPLEMENTATION_PLAN.md - Project implementation plan\n- CLAUDE.md - Technical documentation\n\nNetwork access:\n- Local: https://localhost:4057\n- LAN: https://192.168.50.57:4057\n- Internet: https://176.36.188.208:4057 (via DMZ)\n\n🤖 Generated with Claude Code (https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(ssh-keygen:*)",
+      "Bash(ssh-keyscan:*)",
+      "Bash(~/.ssh/known_hosts)",
+      "Bash(git remote set-url:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:www.metered.ca)"
     ],
     "deny": [],
     "ask": []

@@ -1,4 +1,5 @@
-const { createServer } = require('https');
+const { createServer: createHttpsServer } = require('https');
+const { createServer: createHttpServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
 const { Server } = require('socket.io');
@@ -9,17 +10,26 @@ const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || '0.0.0.0';
 const port = parseInt(process.env.PORT || '4057', 10);
 
-// Загружаем SSL сертификаты
-const httpsOptions = {
-  key: fs.readFileSync(path.join(__dirname, 'ssl', 'key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, 'ssl', 'cert.pem')),
-};
+// Загружаем SSL сертификаты если они есть
+const keyPath = path.join(__dirname, 'ssl', 'key.pem');
+const certPath = path.join(__dirname, 'ssl', 'cert.pem');
+const hasSSL = fs.existsSync(keyPath) && fs.existsSync(certPath);
+
+let httpsOptions = null;
+if (hasSSL) {
+  httpsOptions = {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath),
+  };
+}
+
+const protocol = hasSSL ? 'https' : 'http';
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  const httpsServer = createServer(httpsOptions, async (req, res) => {
+  const requestHandler = async (req, res) => {
     try {
       const parsedUrl = parse(req.url, true);
       await handle(req, res, parsedUrl);
@@ -28,9 +38,13 @@ app.prepare().then(() => {
       res.statusCode = 500;
       res.end('internal server error');
     }
-  });
+  };
 
-  const io = new Server(httpsServer, {
+  const server = hasSSL
+    ? createHttpsServer(httpsOptions, requestHandler)
+    : createHttpServer(requestHandler);
+
+  const io = new Server(server, {
     cors: {
       origin: '*',
       methods: ['GET', 'POST'],
@@ -85,17 +99,21 @@ app.prepare().then(() => {
     });
   });
 
-  httpsServer
+  server
     .once('error', (err) => {
       console.error(err);
       process.exit(1);
     })
     .listen(port, () => {
-      console.log(`> Ready on https://${hostname}:${port}`);
-      console.log(`> Socket.IO server running with HTTPS`);
-      console.log(`> Local:    https://localhost:${port}`);
-      console.log(`> Network:  https://192.168.50.57:${port}`);
-      console.log(`> External: https://176.36.188.208:${port}`);
-      console.log(`\n⚠️  WARNING: Using self-signed certificate. You'll need to accept the certificate in your browser.`);
+      console.log(`> Ready on ${protocol}://${hostname}:${port}`);
+      console.log(`> Socket.IO server running with ${hasSSL ? 'HTTPS' : 'HTTP'}`);
+      console.log(`> Local:    ${protocol}://localhost:${port}`);
+      if (hasSSL) {
+        console.log(`> Network:  ${protocol}://192.168.50.57:${port}`);
+        console.log(`> External: ${protocol}://176.36.188.208:${port}`);
+        console.log(`\n⚠️  WARNING: Using self-signed certificate. You'll need to accept the certificate in your browser.`);
+      } else {
+        console.log(`> Running without SSL (SSL terminated by platform)`);
+      }
     });
 });
