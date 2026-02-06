@@ -24,7 +24,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 ENV NODE_ENV=production
-ENV PORT=4057
+ENV PORT=8000
 ENV HOSTNAME=0.0.0.0
 
 # Копируем необходимые файлы из builder
@@ -41,8 +41,8 @@ RUN mkdir -p /app/ssl
 # Копируем SSL сертификаты (если они уже есть)
 COPY --from=builder /app/ssl ./ssl
 
-# Открываем порт 4057
-EXPOSE 4057
+# Открываем порт 8000
+EXPOSE 8000
 
 # Запускаем приложение
 CMD ["node", "server.js"]
