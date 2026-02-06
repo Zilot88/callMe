@@ -12,7 +12,7 @@ This is a Next.js 16 application using the App Router architecture with TypeScri
 
 ### Local Development
 ```bash
-# Start development server with Socket.IO and HTTPS (runs on https://localhost:4057)
+# Start development server with Socket.IO and HTTPS (runs on https://localhost:8000)
 npm run dev
 
 # Build for production
@@ -46,7 +46,7 @@ npm run docker:restart
 npm run docker:rebuild
 ```
 
-**Note:** The project uses a custom HTTPS server (`server.js`) that runs both Next.js and Socket.IO server together on port 4057 with SSL encryption. Can be deployed via Docker for production use.
+**Note:** The project uses a custom HTTPS server (`server.js`) that runs both Next.js and Socket.IO server together on port 8000 with SSL encryption. Can be deployed via Docker for production use.
 
 ## Architecture
 
@@ -97,9 +97,9 @@ Uses **Socket.IO** for signaling and **native WebRTC API** for mesh-topology vid
 **Important:** WebRTC requires HTTPS for camera/microphone access on mobile devices. The server uses self-signed SSL certificates.
 
 **Network Access:**
-- Local: `https://localhost:4057`
-- LAN: `https://192.168.50.57:4057`
-- Internet (via DMZ): `https://176.36.188.208:4057` - port 4057 is forwarded through DMZ
+- Local: `https://localhost:8000`
+- LAN: `https://192.168.50.57:8000`
+- Internet (via DMZ): `https://176.36.188.208:8000` - port 8000 is forwarded through DMZ
 
 **SSL Certificates:**
 - Self-signed certificates are in `ssl/` directory
@@ -114,7 +114,7 @@ Uses **Socket.IO** for signaling and **native WebRTC API** for mesh-topology vid
 - **ESLint**: v9 with Next.js config (uses new flat config format in `eslint.config.mjs`)
 - **Socket.IO**: v4.8.1 for WebRTC signaling server
 - **Custom HTTPS Server**: `server.js` combines Next.js and Socket.IO with SSL
-- **Port**: 4057 (configurable via PORT environment variable)
+- **Port**: 8000 (configurable via PORT environment variable)
 - **SSL**: Self-signed certificates for HTTPS (required for mobile WebRTC)
 - Uses native WebRTC API (RTCPeerConnection) instead of libraries like PeerJS
 
