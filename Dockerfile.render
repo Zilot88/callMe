@@ -21,8 +21,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=10000
 ENV HOSTNAME=0.0.0.0
+# PORT is set by Render automatically (default 10000)
 
 # Создаем пользователя для безопасности (опционально, можно закомментировать)
 # RUN addgroup --system --gid 1001 nodejs
@@ -39,7 +39,7 @@ COPY --from=builder /app/next.config.ts ./
 # Не переключаемся на непривилегированного пользователя (Render может иметь проблемы)
 # USER nextjs
 
-# Render автоматически использует PORT из env
+# Render sets PORT via env var (default 10000)
 EXPOSE 10000
 
 # Запускаем приложение
