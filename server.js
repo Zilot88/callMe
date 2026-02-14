@@ -8,7 +8,7 @@ const path = require('path');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || '0.0.0.0';
-const port = parseInt(process.env.PORT || '8000', 10);
+const port = parseInt(process.env.PORT || '10000', 10);
 
 // Загружаем SSL сертификаты если они есть
 const keyPath = path.join(__dirname, 'ssl', 'key.pem');

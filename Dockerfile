@@ -20,12 +20,9 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Устанавливаем необходимые системные зависимости
-RUN apk add --no-cache openssl
-
 ENV NODE_ENV=production
-ENV PORT=8000
 ENV HOSTNAME=0.0.0.0
+# PORT берётся из env (default 10000)
 
 # Копируем необходимые файлы из builder
 COPY --from=builder /app/package*.json ./
@@ -35,14 +32,11 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/server.js ./
 COPY --from=builder /app/next.config.ts ./
 
-# Создаем папку для SSL сертификатов
+# SSL сертификаты — копируем если есть, не падаем если нет
 RUN mkdir -p /app/ssl
+COPY --from=builder /app/ssl* ./ssl/
 
-# Копируем SSL сертификаты (если они уже есть)
-COPY --from=builder /app/ssl ./ssl
-
-# Открываем порт 8000
-EXPOSE 8000
+EXPOSE 10000
 
 # Запускаем приложение
 CMD ["node", "server.js"]

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env PORT=8000 node server.js",
+    "dev": "node server.js",
     "build": "next build",
-    "start": "cross-env NODE_ENV=production PORT=8000 node server.js",
+    "start": "NODE_ENV=production node server.js",
     "start:render": "NODE_ENV=production node server-render.js",
     "lint": "eslint",
     "docker:build": "docker-compose build",
