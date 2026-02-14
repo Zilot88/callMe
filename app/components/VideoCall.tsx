@@ -147,7 +147,27 @@ const ICE_SERVER_CONFIGS = {
     name: "⭐ Metered (20GB)",
     config: {
       iceServers: [
-        { urls: "stun:stun.cloudflare.com:3478" },
+        { urls: "stun:stun.relay.metered.ca:80" },
+        {
+          urls: "turn:global.relay.metered.ca:80",
+          username: "cbf0ad6518714f46c139ebe6",
+          credential: "nkmonuq3beg/U+ws",
+        },
+        {
+          urls: "turn:global.relay.metered.ca:80?transport=tcp",
+          username: "cbf0ad6518714f46c139ebe6",
+          credential: "nkmonuq3beg/U+ws",
+        },
+        {
+          urls: "turn:global.relay.metered.ca:443",
+          username: "cbf0ad6518714f46c139ebe6",
+          credential: "nkmonuq3beg/U+ws",
+        },
+        {
+          urls: "turns:global.relay.metered.ca:443?transport=tcp",
+          username: "cbf0ad6518714f46c139ebe6",
+          credential: "nkmonuq3beg/U+ws",
+        },
       ],
     } as RTCConfiguration,
   },
