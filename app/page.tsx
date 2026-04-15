@@ -1,34 +1,189 @@
-import Link from "next/link";
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { v4 as uuidv4 } from "uuid";
+import Box from "@mui/material/Box";
+import Container from "@mui/material/Container";
+import Typography from "@mui/material/Typography";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import AppBar from "@mui/material/AppBar";
+import Toolbar from "@mui/material/Toolbar";
+import InputAdornment from "@mui/material/InputAdornment";
+import IconButton from "@mui/material/IconButton";
+import Divider from "@mui/material/Divider";
+import VideocamIcon from "@mui/icons-material/Videocam";
+import ChatIcon from "@mui/icons-material/Chat";
+import LoginIcon from "@mui/icons-material/Login";
+import AddIcon from "@mui/icons-material/Add";
+import PhoneInTalkIcon from "@mui/icons-material/PhoneInTalk";
 
 export default function Home() {
+  const router = useRouter();
+  const [videoLink, setVideoLink] = useState("");
+  const [chatLink, setChatLink] = useState("");
+
+  const extractRoomId = (input: string): string => {
+    // Accept full URL or just the room ID
+    const match = input.match(/\/(?:call|chat)\/([a-f0-9-]+)/i);
+    if (match) return match[1];
+    // Check if it looks like a UUID
+    if (/^[a-f0-9-]{36}$/i.test(input.trim())) return input.trim();
+    return input.trim();
+  };
+
+  const handleCreateCall = () => {
+    const roomId = uuidv4();
+    router.push(`/call/${roomId}`);
+  };
+
+  const handleJoinCall = () => {
+    if (!videoLink.trim()) return;
+    const roomId = extractRoomId(videoLink);
+    router.push(`/call/${roomId}`);
+  };
+
+  const handleCreateChat = () => {
+    const roomId = uuidv4();
+    router.push(`/chat/${roomId}`);
+  };
+
+  const handleJoinChat = () => {
+    if (!chatLink.trim()) return;
+    const roomId = extractRoomId(chatLink);
+    router.push(`/chat/${roomId}`);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900">
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto">
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      {/* AppBar */}
+      <AppBar position="static" sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
+        <Toolbar>
+          <PhoneInTalkIcon sx={{ mr: 1.5, color: "primary.main" }} />
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "primary.main" }}>
+            CallMe
+          </Typography>
+        </Toolbar>
+      </AppBar>
 
-          {/* Main Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 mb-12">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-4">
-                Присоединиться к конференции
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-8">
-                Все пользователи автоматически объединяются в одну общую комнату.
-              </p>
-            </div>
+      {/* Hero */}
+      <Container maxWidth="md" sx={{ py: 8 }}>
+        <Typography variant="h4" align="center" gutterBottom sx={{ color: "white", mb: 1 }}>
+          Видеозвонки и чаты
+        </Typography>
+        <Typography variant="body1" align="center" sx={{ color: "grey.400", mb: 6 }}>
+          Создайте комнату и поделитесь ссылкой — без регистрации, без установки
+        </Typography>
 
-            <div className="flex justify-center">
-              <Link
-                href="/videocall"
-                className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-lg font-semibold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+        <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, gap: 3 }}>
+          {/* Video Conference Card */}
+          <Card sx={{ flex: 1, bgcolor: "background.paper", border: 1, borderColor: "divider" }}>
+            <CardContent sx={{ p: 4, display: "flex", flexDirection: "column", gap: 2.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+                <VideocamIcon sx={{ fontSize: 36, color: "primary.main" }} />
+                <Typography variant="h5" sx={{ color: "white" }}>
+                  Видеоконференция
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ color: "grey.400" }}>
+                P2P видеозвонок через WebRTC. Создайте комнату и пригласите участников по ссылке.
+              </Typography>
+
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<AddIcon />}
+                onClick={handleCreateCall}
+                fullWidth
+                sx={{ py: 1.5 }}
               >
-                <span className="text-2xl">📞</span>
-                Войти в конференцию
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+                Создать конференцию
+              </Button>
+
+              <Divider sx={{ borderColor: "divider" }}>
+                <Typography variant="caption" sx={{ color: "grey.500" }}>или</Typography>
+              </Divider>
+
+              <TextField
+                placeholder="Вставьте ссылку или ID комнаты"
+                value={videoLink}
+                onChange={(e) => setVideoLink(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleJoinCall()}
+                fullWidth
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton onClick={handleJoinCall} disabled={!videoLink.trim()} color="primary">
+                          <LoginIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Chat Card */}
+          <Card sx={{ flex: 1, bgcolor: "background.paper", border: 1, borderColor: "divider" }}>
+            <CardContent sx={{ p: 4, display: "flex", flexDirection: "column", gap: 2.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+                <ChatIcon sx={{ fontSize: 36, color: "secondary.main" }} />
+                <Typography variant="h5" sx={{ color: "white" }}>
+                  Групповой чат
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ color: "grey.400" }}>
+                Мгновенные сообщения в реальном времени. Создайте чат и общайтесь с друзьями.
+              </Typography>
+
+              <Button
+                variant="contained"
+                color="secondary"
+                size="large"
+                startIcon={<AddIcon />}
+                onClick={handleCreateChat}
+                fullWidth
+                sx={{ py: 1.5 }}
+              >
+                Создать чат
+              </Button>
+
+              <Divider sx={{ borderColor: "divider" }}>
+                <Typography variant="caption" sx={{ color: "grey.500" }}>или</Typography>
+              </Divider>
+
+              <TextField
+                placeholder="Вставьте ссылку или ID чата"
+                value={chatLink}
+                onChange={(e) => setChatLink(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleJoinChat()}
+                fullWidth
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton onClick={handleJoinChat} disabled={!chatLink.trim()} color="secondary">
+                          <LoginIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </CardContent>
+          </Card>
+        </Box>
+
+        {/* Footer */}
+        <Typography variant="body2" align="center" sx={{ color: "grey.600", mt: 6 }}>
+          CallMe &copy; {new Date().getFullYear()} &mdash; WebRTC P2P
+        </Typography>
+      </Container>
+    </Box>
   );
 }

@@ -72,3 +72,10 @@ export async function GET(request: NextRequest) {
     events: filtered,
   });
 }
+
+export async function DELETE() {
+  const count = events.length;
+  events.length = 0;
+  console.log(`[DIAG] Cleared ${count} events`);
+  return NextResponse.json({ ok: true, cleared: count });
+}

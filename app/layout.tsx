@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import MuiProvider from "./MuiProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CallMe - Простой видеозвонок P2P",
-  description: "Безопасные видеозвонки через браузер без регистрации с использованием WebRTC",
+  title: "CallMe - Видеозвонки и чаты",
+  description: "Безопасные видеозвонки и групповые чаты через браузер без регистрации",
 };
 
 export default function RootLayout({
@@ -27,7 +28,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <MuiProvider>{children}</MuiProvider>
       </body>
     </html>
   );

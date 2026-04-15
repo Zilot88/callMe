@@ -51,24 +51,63 @@ app.prepare().then(() => {
     },
   });
 
-  // Хранение активных пользователей в комнате
-  const users = new Map();
+  // Track which rooms each socket is in and their nicknames
+  // Map<socketId, { rooms: Set<roomId>, nickname: string }>
+  const socketMeta = new Map();
 
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+    socketMeta.set(socket.id, { rooms: new Set(), nickname: '' });
 
-    // Отправляем новому пользователю список уже подключенных
-    socket.emit('existing-users', Array.from(users.keys()));
+    // ─── Join a room (video or chat) ────────────────────────────────
+    socket.on('join-room', ({ roomId, type, nickname }) => {
+      socket.join(roomId);
+      const meta = socketMeta.get(socket.id);
+      if (meta) {
+        meta.rooms.add(roomId);
+        if (nickname) meta.nickname = nickname;
+      }
 
-    // Добавляем нового пользователя
-    users.set(socket.id, socket);
+      console.log(`[${type}] ${socket.id} joined room ${roomId}`);
 
-    // Уведомляем всех остальных о новом пользователе
-    socket.broadcast.emit('user-joined', socket.id);
+      // Send list of existing users in this room
+      const room = io.sockets.adapter.rooms.get(roomId);
+      const existingUsers = room
+        ? [...room].filter(id => id !== socket.id)
+        : [];
+      socket.emit('existing-users', existingUsers);
 
-    // Обработка WebRTC сигналов
+      // Notify others in the room
+      socket.to(roomId).emit('user-joined', socket.id);
+
+      // For chat rooms: notify with nickname
+      if (type === 'chat' && nickname) {
+        socket.to(roomId).emit('chat-user-joined', {
+          id: socket.id,
+          nickname,
+        });
+      }
+
+      // Send current participant count
+      const count = room ? room.size : 1;
+      io.to(roomId).emit('participant-count', count);
+    });
+
+    // ─── Leave a room ───────────────────────────────────────────────
+    socket.on('leave-room', (roomId) => {
+      socket.leave(roomId);
+      const meta = socketMeta.get(socket.id);
+      if (meta) meta.rooms.delete(roomId);
+
+      socket.to(roomId).emit('user-left', socket.id);
+
+      const room = io.sockets.adapter.rooms.get(roomId);
+      const count = room ? room.size : 0;
+      io.to(roomId).emit('participant-count', count);
+    });
+
+    // ─── WebRTC signaling (video rooms) ─────────────────────────────
     socket.on('offer', (data) => {
-      console.log('Offer from', socket.id, 'to', data.to);
       io.to(data.to).emit('offer', {
         from: socket.id,
         offer: data.offer,
@@ -76,7 +115,6 @@ app.prepare().then(() => {
     });
 
     socket.on('answer', (data) => {
-      console.log('Answer from', socket.id, 'to', data.to);
       io.to(data.to).emit('answer', {
         from: socket.id,
         answer: data.answer,
@@ -84,18 +122,51 @@ app.prepare().then(() => {
     });
 
     socket.on('ice-candidate', (data) => {
-      console.log('ICE candidate from', socket.id, 'to', data.to);
       io.to(data.to).emit('ice-candidate', {
         from: socket.id,
         candidate: data.candidate,
       });
     });
 
-    // Отключение пользователя
+    // ─── Chat messages ──────────────────────────────────────────────
+    socket.on('chat-message', ({ roomId, message, nickname }) => {
+      socket.to(roomId).emit('chat-message', {
+        id: `${socket.id}-${Date.now()}`,
+        from: socket.id,
+        nickname: nickname || 'Anonymous',
+        message,
+        timestamp: Date.now(),
+        type: 'user',
+      });
+    });
+
+    // ─── Nickname update ────────────────────────────────────────────
+    socket.on('set-nickname', ({ roomId, nickname }) => {
+      const meta = socketMeta.get(socket.id);
+      if (meta) meta.nickname = nickname;
+      socket.to(roomId).emit('nickname-updated', {
+        id: socket.id,
+        nickname,
+      });
+    });
+
+    // ─── Disconnect ─────────────────────────────────────────────────
     socket.on('disconnect', () => {
       console.log('User disconnected:', socket.id);
-      users.delete(socket.id);
-      socket.broadcast.emit('user-left', socket.id);
+      const meta = socketMeta.get(socket.id);
+      if (meta) {
+        for (const roomId of meta.rooms) {
+          socket.to(roomId).emit('user-left', socket.id);
+          socket.to(roomId).emit('chat-user-left', {
+            id: socket.id,
+            nickname: meta.nickname,
+          });
+          const room = io.sockets.adapter.rooms.get(roomId);
+          const count = room ? room.size : 0;
+          io.to(roomId).emit('participant-count', count);
+        }
+      }
+      socketMeta.delete(socket.id);
     });
   });
 
