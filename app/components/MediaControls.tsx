@@ -1,5 +1,17 @@
 "use client";
 
+import Box from "@mui/material/Box";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import MicIcon from "@mui/icons-material/Mic";
+import MicOffIcon from "@mui/icons-material/MicOff";
+import VideocamIcon from "@mui/icons-material/Videocam";
+import VideocamOffIcon from "@mui/icons-material/VideocamOff";
+import CallEndIcon from "@mui/icons-material/CallEnd";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import { useTranslation } from "../lib/i18n";
+
 interface MediaControlsProps {
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
@@ -23,75 +35,82 @@ export default function MediaControls({
   onToggleHideMyVideo,
   participantCount = 1,
 }: MediaControlsProps) {
+  const { t } = useTranslation();
   return (
-    <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center p-2 sm:p-4">
-      {/* Кнопка микрофона */}
-      <button
-        onClick={onToggleAudio}
-        disabled={!isCallActive}
-        className={`flex-1 min-w-[80px] sm:flex-none px-4 sm:px-5 py-3 sm:py-3 rounded-full font-medium text-base sm:text-base transition-all ${
-          isCallActive
-            ? isAudioEnabled
-              ? "bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:scale-105"
-              : "bg-red-500 hover:bg-red-600 text-white shadow-lg hover:scale-105"
-            : "bg-gray-300 text-gray-500 cursor-not-allowed"
-        }`}
-        title={isAudioEnabled ? "Выключить микрофон" : "Включить микрофон"}
-      >
-        <span className="hidden sm:inline">{isAudioEnabled ? "🎤 Микрофон" : "🎤 Выкл"}</span>
-        <span className="sm:hidden text-xl">🎤</span>
-      </button>
+    <Box sx={{ display: "flex", gap: 1.5, justifyContent: "center", alignItems: "center", p: 2 }}>
+      <Tooltip title={isAudioEnabled ? t("mic.on") : t("mic.off")}>
+        <span>
+          <IconButton
+            onClick={onToggleAudio}
+            disabled={!isCallActive}
+            sx={{
+              width: 56, height: 56,
+              bgcolor: isAudioEnabled ? "primary.main" : "error.main",
+              color: "white",
+              "&:hover": { bgcolor: isAudioEnabled ? "primary.dark" : "error.dark" },
+              "&.Mui-disabled": { bgcolor: "grey.700", color: "grey.500" },
+            }}
+          >
+            {isAudioEnabled ? <MicIcon /> : <MicOffIcon />}
+          </IconButton>
+        </span>
+      </Tooltip>
 
-      {/* Кнопка камеры */}
-      <button
-        onClick={onToggleVideo}
-        disabled={!isCallActive}
-        className={`flex-1 min-w-[80px] sm:flex-none px-4 sm:px-5 py-3 sm:py-3 rounded-full font-medium text-base sm:text-base transition-all ${
-          isCallActive
-            ? isVideoEnabled
-              ? "bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:scale-105"
-              : "bg-red-500 hover:bg-red-600 text-white shadow-lg hover:scale-105"
-            : "bg-gray-300 text-gray-500 cursor-not-allowed"
-        }`}
-        title={isVideoEnabled ? "Выключить камеру" : "Включить камеру"}
-      >
-        <span className="hidden sm:inline">{isVideoEnabled ? "📹 Камера" : "📹 Выкл"}</span>
-        <span className="sm:hidden text-xl">📹</span>
-      </button>
+      <Tooltip title={isVideoEnabled ? t("cam.on") : t("cam.off")}>
+        <span>
+          <IconButton
+            onClick={onToggleVideo}
+            disabled={!isCallActive}
+            sx={{
+              width: 56, height: 56,
+              bgcolor: isVideoEnabled ? "primary.main" : "error.main",
+              color: "white",
+              "&:hover": { bgcolor: isVideoEnabled ? "primary.dark" : "error.dark" },
+              "&.Mui-disabled": { bgcolor: "grey.700", color: "grey.500" },
+            }}
+          >
+            {isVideoEnabled ? <VideocamIcon /> : <VideocamOffIcon />}
+          </IconButton>
+        </span>
+      </Tooltip>
 
-      {/* Кнопка "Скрыть себя" - показывается только если есть другие участники */}
       {participantCount > 1 && onToggleHideMyVideo && (
-        <button
-          onClick={onToggleHideMyVideo}
-          disabled={!isCallActive}
-          className={`flex-1 min-w-[80px] sm:flex-none px-4 sm:px-5 py-3 sm:py-3 rounded-full font-medium text-base sm:text-base transition-all ${
-            isCallActive
-              ? hideMyVideo
-                ? "bg-gray-600 hover:bg-gray-700 text-white shadow-lg hover:scale-105"
-                : "bg-purple-500 hover:bg-purple-600 text-white shadow-lg hover:scale-105"
-              : "bg-gray-300 text-gray-500 cursor-not-allowed"
-          }`}
-          title={hideMyVideo ? "Показать своё видео" : "Скрыть своё видео"}
-        >
-          <span className="hidden sm:inline">{hideMyVideo ? "👁️ Показать себя" : "👁️‍🗨️ Скрыть себя"}</span>
-          <span className="sm:hidden text-xl">{hideMyVideo ? "👁️" : "👁️‍🗨️"}</span>
-        </button>
+        <Tooltip title={hideMyVideo ? t("self.show") : t("self.hide")}>
+          <span>
+            <IconButton
+              onClick={onToggleHideMyVideo}
+              disabled={!isCallActive}
+              sx={{
+                width: 56, height: 56,
+                bgcolor: hideMyVideo ? "grey.700" : "secondary.main",
+                color: "white",
+                "&:hover": { bgcolor: hideMyVideo ? "grey.600" : "secondary.dark" },
+                "&.Mui-disabled": { bgcolor: "grey.700", color: "grey.500" },
+              }}
+            >
+              {hideMyVideo ? <VisibilityIcon /> : <VisibilityOffIcon />}
+            </IconButton>
+          </span>
+        </Tooltip>
       )}
 
-      {/* Кнопка завершения звонка */}
-      <button
-        onClick={onEndCall}
-        disabled={!isCallActive}
-        className={`flex-1 min-w-[80px] sm:flex-none px-4 sm:px-5 py-3 sm:py-3 rounded-full font-medium text-base sm:text-base transition-all ${
-          isCallActive
-            ? "bg-red-600 hover:bg-red-700 text-white shadow-lg hover:scale-105"
-            : "bg-gray-300 text-gray-500 cursor-not-allowed"
-        }`}
-        title="Завершить звонок"
-      >
-        <span className="hidden sm:inline">📞 Завершить</span>
-        <span className="sm:hidden text-xl">📞</span>
-      </button>
-    </div>
+      <Tooltip title={t("call.end")}>
+        <span>
+          <IconButton
+            onClick={onEndCall}
+            disabled={!isCallActive}
+            sx={{
+              width: 56, height: 56,
+              bgcolor: "error.main",
+              color: "white",
+              "&:hover": { bgcolor: "error.dark" },
+              "&.Mui-disabled": { bgcolor: "grey.700", color: "grey.500" },
+            }}
+          >
+            <CallEndIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Box>
   );
 }

@@ -5,6 +5,7 @@ import Button from "@mui/material/Button";
 import Snackbar from "@mui/material/Snackbar";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
+import { useTranslation } from "../lib/i18n";
 
 interface ShareLinkButtonProps {
   size?: "small" | "medium" | "large";
@@ -17,6 +18,7 @@ export default function ShareLinkButton({
   variant = "outlined",
   color = "primary",
 }: ShareLinkButtonProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -44,13 +46,13 @@ export default function ShareLinkButton({
         startIcon={copied ? <CheckIcon /> : <ContentCopyIcon />}
         onClick={handleCopy}
       >
-        {copied ? "Скопировано" : "Поделиться"}
+        {copied ? t("share.copied") : t("share.copy")}
       </Button>
       <Snackbar
         open={copied}
         autoHideDuration={2000}
         onClose={() => setCopied(false)}
-        message="Ссылка скопирована в буфер обмена"
+        message={t("share.snackbar")}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
     </>

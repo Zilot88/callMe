@@ -9,6 +9,7 @@ import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import PersonIcon from "@mui/icons-material/Person";
 import InputAdornment from "@mui/material/InputAdornment";
+import { useTranslation } from "../lib/i18n";
 
 interface NicknameDialogProps {
   open: boolean;
@@ -16,6 +17,7 @@ interface NicknameDialogProps {
 }
 
 export default function NicknameDialog({ open, onSubmit }: NicknameDialogProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
 
   const handleSubmit = () => {
@@ -25,12 +27,12 @@ export default function NicknameDialog({ open, onSubmit }: NicknameDialogProps) 
 
   return (
     <Dialog open={open} maxWidth="xs" fullWidth>
-      <DialogTitle>Как вас зовут?</DialogTitle>
+      <DialogTitle>{t("nickname.title")}</DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
           fullWidth
-          placeholder="Введите имя"
+          placeholder={t("nickname.placeholder")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
@@ -48,7 +50,7 @@ export default function NicknameDialog({ open, onSubmit }: NicknameDialogProps) 
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button variant="contained" onClick={handleSubmit} fullWidth>
-          Войти в чат
+          {t("nickname.submit")}
         </Button>
       </DialogActions>
     </Dialog>

@@ -12,7 +12,7 @@ const ChatRoom = dynamic(() => import("../../components/ChatRoom"), {
     <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "background.default" }}>
       <Box sx={{ textAlign: "center" }}>
         <CircularProgress color="secondary" sx={{ mb: 2 }} />
-        <Typography sx={{ color: "grey.400" }}>Загрузка чата...</Typography>
+        <Typography sx={{ color: "grey.400" }}>Loading chat...</Typography>
       </Box>
     </Box>
   ),

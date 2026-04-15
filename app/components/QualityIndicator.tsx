@@ -1,63 +1,80 @@
 "use client";
 
-import type { QualityLevel, VideoQualityPreset } from '../lib/webrtc-types';
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Tooltip from "@mui/material/Tooltip";
+import { useTranslation } from "../lib/i18n";
+import type { QualityLevel, VideoQualityPreset } from "../lib/webrtc-types";
 
-const LEVEL_COLORS: Record<QualityLevel, string> = {
-  excellent: 'bg-green-500',
-  good: 'bg-green-400',
-  degraded: 'bg-yellow-400',
-  poor: 'bg-orange-500',
-  critical: 'bg-red-500',
-};
-
-const LEVEL_LABELS: Record<QualityLevel, string> = {
-  excellent: 'Отлично',
-  good: 'Хорошо',
-  degraded: 'Среднее',
-  poor: 'Плохое',
-  critical: 'Очень плохое',
+const LEVEL_HEX: Record<QualityLevel, string> = {
+  excellent: "#4caf50",
+  good: "#66bb6a",
+  degraded: "#ffca28",
+  poor: "#ff9800",
+  critical: "#f44336",
 };
 
 const PRESET_LABELS: Record<VideoQualityPreset, string> = {
-  high: '720p',
-  medium: '480p',
-  low: '360p',
-  minimal: '240p',
-  'audio-only': 'Только аудио',
+  high: "720p",
+  medium: "480p",
+  low: "360p",
+  minimal: "240p",
+  "audio-only": "audio-only",
 };
-
-const PULSE_LEVELS = new Set<QualityLevel>(['excellent', 'critical']);
 
 interface QualityIndicatorProps {
   level: QualityLevel;
   preset?: VideoQualityPreset;
   showLabel?: boolean;
-  size?: 'sm' | 'md';
+  size?: "sm" | "md";
 }
 
 export default function QualityIndicator({
   level,
   preset,
   showLabel = false,
-  size = 'md',
+  size = "md",
 }: QualityIndicatorProps) {
-  const color = LEVEL_COLORS[level];
-  const pulse = PULSE_LEVELS.has(level) ? 'animate-pulse' : '';
-  const dotSize = size === 'sm' ? 'w-2 h-2' : 'w-3 h-3';
+  const { t } = useTranslation();
+  const color = LEVEL_HEX[level];
+  const dotSize = size === "sm" ? 8 : 12;
+  const levelLabel = t(`quality.${level}` as any);
+  const presetLabel = preset === 'audio-only' ? t("quality.audio_only") : PRESET_LABELS[preset!];
 
   return (
-    <div className="flex items-center gap-1.5" title={`${LEVEL_LABELS[level]}${preset ? ` (${PRESET_LABELS[preset]})` : ''}`}>
-      <div className={`${dotSize} rounded-full ${color} ${pulse}`} />
-      {showLabel && (
-        <span className="text-xs text-gray-500 dark:text-gray-400">
-          {preset ? PRESET_LABELS[preset] : LEVEL_LABELS[level]}
-        </span>
-      )}
-    </div>
+    <Tooltip title={`${levelLabel}${preset ? ` (${presetLabel})` : ""}`}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+        <Box
+          sx={{
+            width: dotSize,
+            height: dotSize,
+            borderRadius: "50%",
+            bgcolor: color,
+            ...(level === "critical" && {
+              animation: "pulse 1.5s infinite",
+              "@keyframes pulse": {
+                "0%, 100%": { opacity: 1 },
+                "50%": { opacity: 0.4 },
+              },
+            }),
+          }}
+        />
+        {showLabel && (
+          <Typography variant="caption" sx={{ color: "grey.400" }}>
+            {preset ? presetLabel : levelLabel}
+          </Typography>
+        )}
+      </Box>
+    </Tooltip>
   );
 }
 
-// Utility for DOM-based per-peer quality dots (used in updateRemoteVideo)
+// For DOM-based quality dots on remote videos
+export function getQualityDotColor(level: QualityLevel): string {
+  return LEVEL_HEX[level];
+}
+
+// Keep for backward compat — now unused in favor of inline styles
 export function getQualityDotClass(level: QualityLevel): string {
-  return `absolute top-2 right-2 w-3 h-3 rounded-full ${LEVEL_COLORS[level]}${PULSE_LEVELS.has(level) ? ' animate-pulse' : ''}`;
+  return "";
 }

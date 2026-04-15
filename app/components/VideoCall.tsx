@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import MediaControls from "./MediaControls";
 import DebugPanel from "./DebugPanel";
-import QualityIndicator, { getQualityDotClass } from "./QualityIndicator";
+import QualityIndicator, { getQualityDotColor } from "./QualityIndicator";
 import { reportDiagnostic } from "../lib/diagnostics";
 import { useConnectionQuality } from "../hooks/useConnectionQuality";
 import { ConnectionQualityMonitor } from "../lib/connection-quality";
@@ -14,6 +14,7 @@ import { applyCodecPreferences } from "../lib/codec-preferences";
 import { getInitialQualityPreset, onNetworkChange } from "../lib/network-info";
 import type { VideoQualityPreset, QualityLevel } from "../lib/webrtc-types";
 import ShareLinkButton from "./ShareLinkButton";
+import { useTranslation } from "../lib/i18n";
 
 interface PeerConnection {
   connection: RTCPeerConnection;
@@ -193,9 +194,12 @@ interface VideoCallProps {
 }
 
 export default function VideoCall({ roomId }: VideoCallProps) {
+  const { t } = useTranslation();
+  const tRef = useRef(t);
+  tRef.current = t;
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
-  const [connectionStatus, setConnectionStatus] = useState<string>("Подключение...");
+  const [connectionStatus, setConnectionStatus] = useState<string>("");
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState<boolean>(false);
@@ -352,7 +356,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     socket.on("connect", () => {
       addDebugLog(`🔌 Connected to Socket.IO server, my ID: ${socket.id}`);
       reportDiagnostic({ eventType: "socket_connected", details: `id=${socket.id}` });
-      setConnectionStatus("Ожидание участников...");
+      setConnectionStatus(tRef.current("status.waiting"));
       setParticipantCount(1);
       // Join the specific room
       socket.emit("join-room", { roomId, type: "video" });
@@ -366,13 +370,13 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     socket.on("connect_error", (error) => {
       addDebugLog(`❌ Socket.IO connection error: ${error.message}`);
       reportDiagnostic({ eventType: "socket_connect_error", details: error.message });
-      setConnectionStatus("Ошибка подключения к серверу");
+      setConnectionStatus(tRef.current("status.error"));
     });
 
     socket.on("disconnect", (reason) => {
       addDebugLog(`❌ Disconnected from Socket.IO server: ${reason}`);
       reportDiagnostic({ eventType: "socket_disconnected", details: reason });
-      setConnectionStatus("Отключено от сервера");
+      setConnectionStatus(tRef.current("status.disconnected"));
     });
 
     return socket;
@@ -456,7 +460,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       }
 
       updateRemoteVideo(userId, remoteStream);
-      setConnectionStatus("Звонок активен");
+      setConnectionStatus(tRef.current("status.active"));
     };
 
     // ICE candidates
@@ -702,26 +706,24 @@ export default function VideoCall({ roomId }: VideoCallProps) {
 
     if (!videoElement && remoteVideoContainerRef.current) {
       const container = document.createElement("div");
-      container.className = "relative bg-black rounded-lg overflow-hidden shadow-xl";
+      container.style.cssText = "position:relative;background:#000;border-radius:12px;overflow:hidden;min-height:0";
       container.id = `peer-${userId}`;
 
       videoElement = document.createElement("video");
       videoElement.autoplay = true;
       videoElement.playsInline = true;
       videoElement.muted = false;
-      videoElement.className = "w-full h-full object-cover";
+      videoElement.style.cssText = "width:100%;height:100%;object-fit:cover";
       videoElement.srcObject = stream;
-      // Explicit play() for iOS Safari where autoplay can be blocked
       videoElement.play().catch(() => {});
 
       const label = document.createElement("div");
-      label.className = "absolute bottom-2 left-2 bg-purple-600 text-white px-2 py-1 rounded text-xs sm:text-sm font-semibold";
-      label.textContent = `Участник ${userId.substring(0, 4)}`;
+      label.style.cssText = "position:absolute;bottom:8px;left:8px;background:#7c3aed;color:#fff;padding:2px 10px;border-radius:8px;font-size:12px;font-weight:600";
+      label.textContent = `${tRef.current("video.participant")} ${userId.substring(0, 4)}`;
 
-      // Quality indicator dot (updated by quality monitor)
       const qualityDot = document.createElement("div");
       qualityDot.id = `quality-${userId}`;
-      qualityDot.className = getQualityDotClass('good');
+      qualityDot.style.cssText = "position:absolute;top:8px;right:8px;width:12px;height:12px;border-radius:50%;background:#4caf50";
 
       container.appendChild(videoElement);
       container.appendChild(label);
@@ -869,7 +871,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       addDebugLog(`👤 New user joined: ${userId.substring(0, 8)}...`);
       createPeerConnection(userId, false);
       setParticipantCount((prev) => prev + 1);
-      setConnectionStatus("Участник присоединился");
+      setConnectionStatus(tRef.current("status.joined"));
     });
 
     socket.on("offer", async ({ from, offer }) => {
@@ -930,7 +932,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       addDebugLog(`👋 User left: ${userId.substring(0, 8)}...`);
       removePeer(userId);
       setParticipantCount((prev) => Math.max(1, prev - 1));
-      setConnectionStatus("Участник отключился");
+      setConnectionStatus(tRef.current("status.left"));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addDebugLog, createPeerConnection]);
@@ -964,7 +966,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       // Update per-peer quality dots in DOM
       snapshot.peers.forEach((metrics, peerId) => {
         const dot = document.getElementById(`quality-${peerId}`);
-        if (dot) dot.className = getQualityDotClass(metrics.level);
+        if (dot) dot.style.background = getQualityDotColor(metrics.level);
       });
     });
 
@@ -1012,7 +1014,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       if (cancelled) return;
 
       // 2. THEN connect socket — localStreamRef is guaranteed to be set
-      setConnectionStatus("Подключение к серверу...");
+      setConnectionStatus(tRef.current("status.connecting_server"));
       const socket = connectSocket();
       setupSocketHandlers(socket);
 
@@ -1096,7 +1098,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   const requestMediaPermissions = async () => {
     try {
       addDebugLog("🔄 Requesting media permissions...");
-      setConnectionStatus("Запрос разрешений...");
+      setConnectionStatus(tRef.current("status.requesting"));
 
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => {
@@ -1143,12 +1145,12 @@ export default function VideoCall({ roomId }: VideoCallProps) {
         });
       });
 
-      setConnectionStatus(peersRef.current.size > 0 ? "Подключено" : "Ожидание участников...");
+      setConnectionStatus(peersRef.current.size > 0 ? tRef.current("status.connected") : tRef.current("status.waiting"));
       addDebugLog("✅ Media permissions updated");
     } catch (error: any) {
       addDebugLog(`❌ Failed to get media: ${error.message}`);
-      setConnectionStatus("Ошибка доступа к медиа");
-      alert("Не удалось получить доступ к камере или микрофону. Проверьте настройки браузера.");
+      setConnectionStatus(tRef.current("status.media_error"));
+      alert(tRef.current("video.media_error_alert"));
     }
   };
 
@@ -1177,162 +1179,146 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     window.location.href = "/";
   };
 
+  // MUI imports are used inline via the already-imported Box/Typography etc.
+  // Additional MUI imports for the return JSX
+  const MuiBox = require("@mui/material/Box").default;
+  const MuiAppBar = require("@mui/material/AppBar").default;
+  const MuiToolbar = require("@mui/material/Toolbar").default;
+  const MuiTypography = require("@mui/material/Typography").default;
+  const MuiChip = require("@mui/material/Chip").default;
+  const MuiSelect = require("@mui/material/Select").default;
+  const MuiMenuItem = require("@mui/material/MenuItem").default;
+  const MuiFormControl = require("@mui/material/FormControl").default;
+  const MuiIconButton = require("@mui/material/IconButton").default;
+  const MuiButton = require("@mui/material/Button").default;
+  const MuiTooltip = require("@mui/material/Tooltip").default;
+  const MuiPaper = require("@mui/material/Paper").default;
+
+  const gridCols = participantCount === 2 ? 2 : participantCount === 3 ? 3 : participantCount === 4 ? 2 : Math.min(participantCount, 4);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Top Header - Title and Settings */}
-      <div className="sticky top-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 py-3">
-          {/* Статус с кнопкой Debug и индикатором качества */}
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <QualityIndicator level={overallLevel} preset={currentPreset} showLabel size="md" />
-            <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 font-medium">
-              {connectionStatus}
-              <span className="ml-2 text-xs sm:text-sm font-normal text-gray-600 dark:text-gray-400">
-                ({participantCount} {participantCount === 1 ? 'участник' : participantCount < 5 ? 'участника' : 'участников'})
-              </span>
-            </p>
-            <ShareLinkButton size="small" variant="outlined" />
-            {/* Debug Button */}
-            <button
-              onClick={() => setShowDebug(!showDebug)}
-              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-all hover:scale-110"
-              title={showDebug ? "Скрыть Debug логи" : "Показать Debug логи"}
+    <MuiBox sx={{ height: "100vh", display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
+      {/* Top Header */}
+      <MuiAppBar position="static" sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
+        <MuiToolbar variant="dense" sx={{ gap: 1, flexWrap: "wrap", py: 1 }}>
+          <MuiIconButton href="/" size="small" sx={{ color: "grey.400" }}>
+            <span style={{ fontSize: 18 }}>&#x2190;</span>
+          </MuiIconButton>
+
+          <QualityIndicator level={overallLevel} preset={currentPreset} showLabel size="sm" />
+
+          <MuiTypography variant="body2" sx={{ color: "grey.300", flexGrow: 1 }}>
+            {connectionStatus}
+            <MuiChip label={participantCount} size="small" sx={{ ml: 1, height: 20, fontSize: 11 }} />
+          </MuiTypography>
+
+          <MuiFormControl size="small" sx={{ minWidth: 140 }}>
+            <MuiSelect
+              value={selectedRegion}
+              onChange={(e: { target: { value: string } }) => {
+                const newRegion = e.target.value as keyof typeof ICE_SERVER_CONFIGS;
+                setSelectedRegion(newRegion);
+                addDebugLog(`Changed ICE servers to: ${ICE_SERVER_CONFIGS[newRegion].name}`);
+                setTimeout(() => reconnectAllPeers(), 100);
+              }}
+              sx={{ color: "white", fontSize: 12, "& .MuiSelect-icon": { color: "grey.400" } }}
             >
-              <span className="text-lg">🕷️</span>
-            </button>
-          </div>
+              {Object.entries(ICE_SERVER_CONFIGS).map(([key, value]) => (
+                <MuiMenuItem key={key} value={key} sx={{ fontSize: 12 }}>
+                  {value.name}
+                </MuiMenuItem>
+              ))}
+            </MuiSelect>
+          </MuiFormControl>
 
-          {/* Настройки в одну строку - 50% на 50% */}
-          <div className="flex gap-2 max-w-4xl mx-auto">
-            {/* Region Selector - 50% */}
-            <div className="flex-1 flex items-center gap-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 shadow-sm">
-              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                🌍
-              </label>
-              <select
-                value={selectedRegion}
-                onChange={(e) => {
-                  const newRegion = e.target.value as keyof typeof ICE_SERVER_CONFIGS;
-                  setSelectedRegion(newRegion);
-                  addDebugLog(`🌍 Changed ICE servers to: ${ICE_SERVER_CONFIGS[newRegion].name}`);
-                  setTimeout(() => reconnectAllPeers(), 100);
-                }}
-                className="flex-1 bg-transparent text-xs sm:text-sm text-gray-900 dark:text-white focus:outline-none"
-              >
-                {Object.entries(ICE_SERVER_CONFIGS).map(([key, value]) => (
-                  <option key={key} value={key}>
-                    {value.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <MuiButton size="small" variant="outlined" onClick={requestMediaPermissions} sx={{ fontSize: 11, minWidth: 0, px: 1.5 }}>
+            {t("video.media_btn")}
+          </MuiButton>
 
-            {/* Кнопка запроса разрешений - 50% */}
-            <button
-              onClick={requestMediaPermissions}
-              className="flex-1 flex items-center justify-center gap-1 sm:gap-2 px-2 py-2 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
-              title="Перезапросить доступ к камере и микрофону"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-3 w-3 sm:h-4 sm:w-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M23 4v6h-6" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
-              <span className="hidden sm:inline">Запросить доступ</span>
-              <span className="sm:hidden">🎥🎤</span>
-            </button>
-          </div>
-        </div>
-      </div>
+          <ShareLinkButton size="small" variant="outlined" />
 
-      {/* Контейнер видео на весь экран с отступами */}
-      <div className="h-[calc(100vh-140px)] sm:h-[calc(100vh-160px)] p-2 sm:p-4 md:p-6 pb-20 sm:pb-24">
-        {participantCount === 1 ? (
-          /* Пока нет других участников - показываем большое локальное видео */
-          <div className="h-full flex flex-col items-center justify-center gap-4">
-            <div className="w-full max-w-3xl">
-              <div className="relative bg-black rounded-lg overflow-hidden shadow-2xl aspect-video">
+          <MuiTooltip title={showDebug ? "Скрыть Debug" : "Debug"}>
+            <MuiIconButton size="small" onClick={() => setShowDebug(!showDebug)} sx={{ color: "grey.400" }}>
+              <span style={{ fontSize: 16 }}>&#x1F41B;</span>
+            </MuiIconButton>
+          </MuiTooltip>
+        </MuiToolbar>
+      </MuiAppBar>
+
+      {/* Video Area */}
+      <MuiBox sx={{ flex: 1, overflow: "hidden", p: { xs: 1, sm: 2, md: 3 }, pb: 10 }}>
+        {participantCount <= 1 ? (
+          <MuiBox sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 }}>
+            <MuiBox sx={{ width: "100%", maxWidth: 800 }}>
+              <MuiPaper elevation={4} sx={{ position: "relative", bgcolor: "black", borderRadius: 2, overflow: "hidden", aspectRatio: "16/9" }}>
                 <video
                   ref={localVideoRef}
                   autoPlay
                   muted
                   playsInline
-                  className="w-full h-full object-cover"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
                 {!isVideoEnabled && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                    <p className="text-white text-lg sm:text-xl">Камера выключена</p>
-                  </div>
+                  <MuiBox sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "grey.900" }}>
+                    <MuiTypography sx={{ color: "grey.400" }}>{t("video.cam_off")}</MuiTypography>
+                  </MuiBox>
                 )}
-                <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 bg-black/70 text-white px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold">
-                  Вы
-                </div>
-              </div>
-            </div>
-            <div className="text-center">
-              <p className="text-gray-600 dark:text-gray-400 text-base sm:text-lg font-medium">
-                Ожидание других участников...
-              </p>
-              <p className="text-gray-500 dark:text-gray-500 text-xs sm:text-sm mt-2">
-                Поделитесь ссылкой на эту страницу
-              </p>
-            </div>
-          </div>
+                <MuiChip label={t("video.you")} size="small" sx={{ position: "absolute", bottom: 8, left: 8, bgcolor: "primary.main", color: "white" }} />
+              </MuiPaper>
+            </MuiBox>
+            <MuiBox sx={{ textAlign: "center" }}>
+              <MuiTypography sx={{ color: "grey.400" }}>{t("video.waiting")}</MuiTypography>
+              <MuiTypography variant="caption" sx={{ color: "grey.600" }}>{t("video.share_hint")}</MuiTypography>
+            </MuiBox>
+          </MuiBox>
         ) : (
-          /* Есть другие участники - показываем сетку */
-          <div className="h-full w-full">
-            <div className={`grid gap-2 sm:gap-3 md:gap-4 h-full ${
-              participantCount === 2
-                ? 'grid-cols-1 sm:grid-cols-2'
-                : participantCount === 3
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-                : participantCount === 4
-                ? 'grid-cols-2'
-                : 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-            }`}>
-              {/* Локальное видео - скрываем если hideMyVideo === true */}
-              {!hideMyVideo && (
-                <div className="relative bg-black rounded-lg overflow-hidden shadow-xl">
-                  <video
-                    ref={localVideoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-                  {!isVideoEnabled && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                      <p className="text-white text-sm sm:text-base">Камера выключена</p>
-                    </div>
-                  )}
-                  <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs sm:text-sm font-semibold">
-                    Вы
-                  </div>
-                </div>
-              )}
+          <MuiBox sx={{
+            height: "100%",
+            display: "grid",
+            gridTemplateColumns: { xs: gridCols <= 2 ? `repeat(1, 1fr)` : `repeat(2, 1fr)`, sm: `repeat(${gridCols}, 1fr)` },
+            gap: { xs: 1, sm: 1.5, md: 2 },
+          }}>
+            {!hideMyVideo && (
+              <MuiPaper elevation={3} sx={{ position: "relative", bgcolor: "black", borderRadius: 2, overflow: "hidden", minHeight: 0 }}>
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+                {!isVideoEnabled && (
+                  <MuiBox sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "grey.900" }}>
+                    <MuiTypography variant="body2" sx={{ color: "grey.400" }}>{t("video.cam_off")}</MuiTypography>
+                  </MuiBox>
+                )}
+                <MuiChip label={t("video.you")} size="small" sx={{ position: "absolute", bottom: 8, left: 8, bgcolor: "primary.main", color: "white" }} />
+              </MuiPaper>
+            )}
 
-              {/* Контейнер для удаленных видео */}
-              <div
-                ref={remoteVideoContainerRef}
-                className={`contents ${hideMyVideo ? 'col-span-full' : ''}`}
-              >
-                {/* Видео элементы других участников будут добавлены динамически */}
-              </div>
-            </div>
-          </div>
+            {/* Remote videos container */}
+            <div
+              ref={remoteVideoContainerRef}
+              style={{ display: "contents" }}
+            />
+          </MuiBox>
         )}
-      </div>
+      </MuiBox>
 
-      {/* Bottom Footer - MediaControls */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-t border-gray-200 dark:border-gray-700">
+      {/* Bottom Controls */}
+      <MuiPaper
+        elevation={8}
+        sx={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 40,
+          bgcolor: "background.paper",
+          borderTop: 1,
+          borderColor: "divider",
+        }}
+      >
         <MediaControls
           isAudioEnabled={isAudioEnabled}
           isVideoEnabled={isVideoEnabled}
@@ -1344,7 +1330,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
           onToggleHideMyVideo={() => setHideMyVideo(!hideMyVideo)}
           participantCount={participantCount}
         />
-      </div>
+      </MuiPaper>
 
       {/* Debug Panel */}
       <DebugPanel
@@ -1352,6 +1338,6 @@ export default function VideoCall({ roomId }: VideoCallProps) {
         isOpen={showDebug}
         onToggle={() => setShowDebug(!showDebug)}
       />
-    </div>
+    </MuiBox>
   );
 }

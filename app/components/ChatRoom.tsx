@@ -16,6 +16,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ShareLinkButton from "./ShareLinkButton";
 import NicknameDialog from "./NicknameDialog";
+import { useTranslation } from "../lib/i18n";
 
 interface ChatMessage {
   id: string;
@@ -31,6 +32,7 @@ interface ChatRoomProps {
 }
 
 export default function ChatRoom({ roomId }: ChatRoomProps) {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [nickname, setNickname] = useState("");
@@ -94,12 +96,12 @@ export default function ChatRoom({ roomId }: ChatRoomProps) {
       });
 
       socket.on("chat-user-joined", ({ nickname: joinedNick }: { id: string; nickname: string }) => {
-        addSystemMessage(`${joinedNick} присоединился к чату`);
+        addSystemMessage(`${joinedNick} ${t("chat.joined")}`);
       });
 
       socket.on("chat-user-left", ({ nickname: leftNick }: { id: string; nickname: string }) => {
         if (leftNick) {
-          addSystemMessage(`${leftNick} покинул чат`);
+          addSystemMessage(`${leftNick} ${t("chat.left")}`);
         }
       });
 
@@ -108,13 +110,13 @@ export default function ChatRoom({ roomId }: ChatRoomProps) {
         socket.disconnect();
       };
     },
-    [roomId, addSystemMessage],
+    [roomId, addSystemMessage, t],
   );
 
   const handleNicknameSubmit = (nick: string) => {
     setNickname(nick);
     setShowNicknameDialog(false);
-    addSystemMessage(`Вы вошли как ${nick}`);
+    addSystemMessage(`${t("chat.you_joined")} ${nick}`);
     connectToChat(nick);
   };
 
@@ -172,7 +174,7 @@ export default function ChatRoom({ roomId }: ChatRoomProps) {
           </IconButton>
           <ChatIcon sx={{ color: "secondary.main" }} />
           <Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1, color: "white" }}>
-            Чат
+            {t("chat.title")}
           </Typography>
           <Chip
             icon={<PeopleIcon />}
@@ -183,7 +185,7 @@ export default function ChatRoom({ roomId }: ChatRoomProps) {
           />
           <ShareLinkButton color="secondary" />
           {!connected && (
-            <Chip label="Нет связи" color="error" size="small" />
+            <Chip label={t("chat.no_connection")} color="error" size="small" />
           )}
         </Toolbar>
       </AppBar>
@@ -247,7 +249,7 @@ export default function ChatRoom({ roomId }: ChatRoomProps) {
       >
         <TextField
           fullWidth
-          placeholder={showNicknameDialog ? "Введите имя..." : "Сообщение..."}
+          placeholder={showNicknameDialog ? t("chat.enter_name") : t("chat.placeholder")}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())}

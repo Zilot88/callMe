@@ -2,6 +2,15 @@
 
 import React from "react";
 import { reportDiagnostic } from "../lib/diagnostics";
+import { translations } from "../lib/translations";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import ErrorOutline from "@mui/icons-material/ErrorOutlineOutlined";
+import Refresh from "@mui/icons-material/Refresh";
+import Report from "@mui/icons-material/Report";
+import Home from "@mui/icons-material/Home";
 
 interface Props {
   children: React.ReactNode;
@@ -16,6 +25,12 @@ export default class VideoCallErrorBoundary extends React.Component<Props, State
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
+  }
+
+  private t(key: keyof typeof translations): string {
+    let locale: "en" | "ru" = "en";
+    try { const saved = localStorage.getItem("callme-locale"); if (saved === "en" || saved === "ru") locale = saved; } catch {}
+    return translations[key]?.[locale] ?? translations[key]?.en ?? key;
   }
 
   static getDerivedStateFromError(error: Error): State {
@@ -41,43 +56,34 @@ export default class VideoCallErrorBoundary extends React.Component<Props, State
       details: `User-reported: ${error?.name}: ${error?.message}`,
       error: error?.stack || undefined,
     });
-    alert("Отчёт отправлен. Спасибо!");
+    alert("Report sent.");
   };
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 sm:p-8 max-w-md w-full text-center space-y-4">
-            <div className="text-5xl">😵</div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Что-то пошло не так
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 break-words">
-              {this.state.error?.message || "Неизвестная ошибка"}
-            </p>
-            <div className="flex flex-col gap-2 pt-2">
-              <button
-                onClick={this.handleRetry}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-              >
-                Попробовать снова
-              </button>
-              <button
-                onClick={this.handleReport}
-                className="w-full py-2.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium rounded-lg transition-colors text-sm"
-              >
-                Отправить отчёт
-              </button>
-              <a
-                href="/"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline mt-1"
-              >
-                На главную
-              </a>
-            </div>
-          </div>
-        </div>
+        <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "background.default", p: 2 }}>
+          <Paper elevation={4} sx={{ maxWidth: 420, width: "100%", p: 4, textAlign: "center" }}>
+            <ErrorOutline sx={{ fontSize: 64, color: "error.main", mb: 2 }} />
+            <Typography variant="h5" gutterBottom>
+              {this.t("error.title")}
+            </Typography>
+            <Typography variant="body2" sx={{ color: "grey.400", mb: 3, wordBreak: "break-word" }}>
+              {this.state.error?.message || this.t("error.unknown")}
+            </Typography>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Button variant="contained" startIcon={<Refresh />} onClick={this.handleRetry} fullWidth>
+                {this.t("error.retry")}
+              </Button>
+              <Button variant="outlined" startIcon={<Report />} onClick={this.handleReport} fullWidth color="secondary">
+                {this.t("error.report")}
+              </Button>
+              <Button href="/" startIcon={<Home />} size="small">
+                {this.t("nav.home")}
+              </Button>
+            </Box>
+          </Paper>
+        </Box>
       );
     }
     return this.props.children;
