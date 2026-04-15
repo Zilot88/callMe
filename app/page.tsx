@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { v4 as uuidv4 } from "uuid";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 import Typography from "@mui/material/Typography";
@@ -36,7 +35,7 @@ export default function Home() {
   };
 
   const handleCreateCall = () => {
-    const roomId = uuidv4();
+    const roomId = crypto.randomUUID();
     router.push(`/call/${roomId}`);
   };
 
@@ -47,7 +46,7 @@ export default function Home() {
   };
 
   const handleCreateChat = () => {
-    const roomId = uuidv4();
+    const roomId = crypto.randomUUID();
     router.push(`/chat/${roomId}`);
   };
 
