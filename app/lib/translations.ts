@@ -24,6 +24,9 @@ export const translations = {
   "camera.switch": { en: "Switch camera", ru: "Сменить камеру" },
   "speaker.on": { en: "Mute speakers", ru: "Выключить звук" },
   "speaker.off": { en: "Unmute speakers", ru: "Включить звук" },
+  "layout.auto": { en: "Layout: Auto", ru: "Раскладка: Авто" },
+  "layout.grid": { en: "Layout: Grid", ru: "Раскладка: Сетка" },
+  "layout.stack": { en: "Layout: Stack", ru: "Раскладка: Стопка" },
   "call.end": { en: "End call", ru: "Завершить звонок" },
 
   // ─── Video call ───────────────────────────────────────────────────

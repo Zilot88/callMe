@@ -207,6 +207,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   const [meteredIceServers, setMeteredIceServers] = useState<RTCConfiguration | null>(null);
   const [hideMyVideo, setHideMyVideo] = useState<boolean>(false);
   const [isSpeakerEnabled, setIsSpeakerEnabled] = useState<boolean>(true);
+  const [layoutMode, setLayoutMode] = useState<'auto' | 'grid' | 'stack'>('auto');
   const [currentPreset, setCurrentPreset] = useState<VideoQualityPreset>('high');
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -960,6 +961,12 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       await currentTrack.applyConstraints({ facingMode: { exact: nextFacing } });
       const newSettings = currentTrack.getSettings();
       if (newSettings.facingMode === nextFacing) {
+        // iOS sometimes pauses the <video> during constraint change — force
+        // it to refresh srcObject and resume playback so self-view stays on.
+        if (localVideoRef.current && localStreamRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current;
+          localVideoRef.current.play().catch(() => {});
+        }
         addDebugLog(`✅ Switched via applyConstraints to ${nextFacing}`);
         reportDiagnostic({ eventType: "camera_switched", details: `applyConstraints ${nextFacing}` });
         return;
@@ -1383,6 +1390,10 @@ export default function VideoCall({ roomId }: VideoCallProps) {
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = newStream;
+        // iOS Safari requires an explicit play() after srcObject changes to
+        // start rendering — otherwise the user sees a black tile until they
+        // tap somewhere else.
+        localVideoRef.current.play().catch(() => {});
       }
 
       const audioTrack = newStream.getAudioTracks()[0];
@@ -1470,7 +1481,24 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   const MuiTooltip = require("@mui/material/Tooltip").default;
   const MuiPaper = require("@mui/material/Paper").default;
 
-  const gridCols = participantCount === 2 ? 2 : participantCount === 3 ? 3 : participantCount === 4 ? 2 : Math.min(participantCount, 4);
+  // Compute grid columns per layout mode and breakpoint.
+  //   auto   → smart picks (current behavior): tries to balance count vs screen
+  //   grid   → ceil(√n) square-ish grid, capped at 2 on mobile to stay readable
+  //   stack  → single column, full-width tiles, scrolls vertically
+  const autoCols = participantCount === 2 ? 2 : participantCount === 3 ? 3 : participantCount === 4 ? 2 : Math.min(participantCount, 4);
+  const gridCols = autoCols; // backward-compat for the alone-view branch
+  const sqrtCols = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, participantCount))));
+  const cols = (() => {
+    if (layoutMode === 'stack') return { xs: 1, sm: 1 };
+    if (layoutMode === 'grid') return { xs: Math.min(2, sqrtCols), sm: sqrtCols };
+    // auto
+    return { xs: autoCols <= 2 ? 1 : 2, sm: autoCols };
+  })();
+  // Tile minimum height — stack mode wants taller tiles, auto/grid keeps
+  // the current safe minimums.
+  const rowMin = layoutMode === 'stack'
+    ? { xs: '45vh', sm: '50vh' }
+    : { xs: '240px', sm: '280px' };
 
   return (
     <MuiBox sx={{ height: "100vh", display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
@@ -1523,6 +1551,19 @@ export default function VideoCall({ roomId }: VideoCallProps) {
             {t("video.media_btn")}
           </MuiButton>
 
+          {/* Layout cycle button: auto → grid → stack → auto */}
+          <MuiTooltip title={layoutMode === 'auto' ? t("layout.auto") : layoutMode === 'grid' ? t("layout.grid") : t("layout.stack")}>
+            <MuiIconButton
+              size="small"
+              onClick={() => setLayoutMode(m => m === 'auto' ? 'grid' : m === 'grid' ? 'stack' : 'auto')}
+              sx={{ color: "grey.300", p: { xs: 0.5, sm: 1 } }}
+            >
+              <span style={{ fontSize: 16 }}>
+                {layoutMode === 'auto' ? '▦' : layoutMode === 'grid' ? '▧' : '☰'}
+              </span>
+            </MuiIconButton>
+          </MuiTooltip>
+
           <ShareLinkButton size="small" variant="outlined" iconOnly={{ xs: true, sm: false }} />
 
           <MuiTooltip title={showDebug ? "Скрыть Debug" : "Debug"}>
@@ -1563,11 +1604,10 @@ export default function VideoCall({ roomId }: VideoCallProps) {
           <MuiBox sx={{
             minHeight: "100%",
             display: "grid",
-            gridTemplateColumns: { xs: gridCols <= 2 ? `repeat(1, 1fr)` : `repeat(2, 1fr)`, sm: `repeat(${gridCols}, 1fr)` },
-            // Rows: tall minimum so tiles stay readable on phones — when
-            // they don't fit, parent scrolls. iPhone 13 portrait fits 2
-            // rows comfortably; 3+ kicks in vertical scroll automatically.
-            gridAutoRows: { xs: "minmax(240px, 1fr)", sm: "minmax(280px, 1fr)" },
+            gridTemplateColumns: { xs: `repeat(${cols.xs}, 1fr)`, sm: `repeat(${cols.sm}, 1fr)` },
+            // Rows: stack mode forces tall tiles → vertical scroll feel;
+            // auto/grid use safe min so tiles stay readable on phones.
+            gridAutoRows: { xs: `minmax(${rowMin.xs}, 1fr)`, sm: `minmax(${rowMin.sm}, 1fr)` },
             gap: { xs: 1, sm: 1.5, md: 2 },
           }}>
             {!hideMyVideo && (
