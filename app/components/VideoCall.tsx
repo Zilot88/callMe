@@ -1347,7 +1347,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       </MuiAppBar>
 
       {/* Video Area */}
-      <MuiBox sx={{ flex: 1, overflow: "hidden", p: { xs: 1, sm: 2, md: 3 }, pb: 10 }}>
+      <MuiBox sx={{ flex: 1, overflowY: "auto", overflowX: "hidden", p: { xs: 1, sm: 2, md: 3 }, pb: 12 }}>
         {participantCount <= 1 ? (
           <MuiBox sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 }}>
             <MuiBox sx={{ width: "100%", maxWidth: 800 }}>
@@ -1374,11 +1374,13 @@ export default function VideoCall({ roomId }: VideoCallProps) {
           </MuiBox>
         ) : (
           <MuiBox sx={{
-            height: "100%",
-            minHeight: 0,
+            minHeight: "100%",
             display: "grid",
             gridTemplateColumns: { xs: gridCols <= 2 ? `repeat(1, 1fr)` : `repeat(2, 1fr)`, sm: `repeat(${gridCols}, 1fr)` },
-            gridAutoRows: "1fr",
+            // Rows: at least 180px tall (mobile) / 220px (desktop), expand
+            // to fill height when participants fit. When they don't fit —
+            // parent scrolls instead of squishing tiles to nothing.
+            gridAutoRows: { xs: "minmax(180px, 1fr)", sm: "minmax(220px, 1fr)" },
             gap: { xs: 1, sm: 1.5, md: 2 },
           }}>
             {!hideMyVideo && (
