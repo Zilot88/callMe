@@ -219,11 +219,18 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   // ICE auto-rotation state
   const peerIceAttemptRef = useRef<Map<string, number>>(new Map());
   const workingIceConfigRef = useRef<keyof typeof ICE_SERVER_CONFIGS | null>(null);
+  // Per-peer ICE config currently in use (so rotation can skip it on failure)
+  const peerCurrentConfigRef = useRef<Map<string, keyof typeof ICE_SERVER_CONFIGS>>(new Map());
+  // Per-peer counters of locally-gathered ICE candidate types (host/srflx/relay)
+  const peerCandidateStatsRef = useRef<Map<string, { host: number; srflx: number; relay: number; prflx: number }>>(new Map());
   // Disconnected peer timers
   const disconnectTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // ICE restart tracking
   const iceRestartAttemptsRef = useRef<Map<string, number>>(new Map());
   const iceRestartTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // reacquireVideo retry limit — prevents infinite loop when camera is genuinely unavailable
+  const reacquireAttemptsRef = useRef<number>(0);
+  const reacquireTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Adaptive bitrate controller
   const abcRef = useRef<AdaptiveBitrateController | null>(null);
   // Total reconnection attempts (ICE restarts + full reconnections)
@@ -246,13 +253,8 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     return ICE_SERVER_CONFIGS[r].config;
   }, []);
 
-  // Auto-hide my video when exactly 2 participants + update ABC participant cap
+  // Update ABC participant cap (self-view stays visible regardless of count)
   useEffect(() => {
-    if (participantCount === 2) {
-      setHideMyVideo(true);
-    } else if (participantCount > 2) {
-      setHideMyVideo(false);
-    }
     abcRef.current?.setParticipantCount(participantCount);
   }, [participantCount]);
 
@@ -387,9 +389,14 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     userId: string,
     createOffer: boolean,
     configOverride?: RTCConfiguration,
+    configKeyOverride?: keyof typeof ICE_SERVER_CONFIGS,
   ) => {
-    const iceConfig = configOverride || getIceConfig(workingIceConfigRef.current || undefined);
-    addDebugLog(`🔧 Creating peer connection with ${userId}, initiator: ${createOffer}`);
+    const configKey: keyof typeof ICE_SERVER_CONFIGS =
+      configKeyOverride || workingIceConfigRef.current || selectedRegionRef.current;
+    const iceConfig = configOverride || getIceConfig(configKey);
+    peerCurrentConfigRef.current.set(userId, configKey);
+    peerCandidateStatsRef.current.set(userId, { host: 0, srflx: 0, relay: 0, prflx: 0 });
+    addDebugLog(`🔧 Creating peer connection with ${userId}, initiator: ${createOffer}, ice=${configKey}`);
     const peerConnection = new RTCPeerConnection(iceConfig);
 
     let hasRelayCandidates = false;
@@ -470,7 +477,19 @@ export default function VideoCall({ roomId }: VideoCallProps) {
         addDebugLog(`🧊 ICE candidate for ${userId}: ${candidateType} (${event.candidate.protocol})`);
         addDebugLog(`  └─ ${event.candidate.address || 'no-address'}:${event.candidate.port || 'no-port'}`);
 
+        const stats = peerCandidateStatsRef.current.get(userId);
+        if (stats && candidateType && candidateType in stats) {
+          stats[candidateType as keyof typeof stats]++;
+        }
+
         if (candidateType === 'relay') {
+          if (!hasRelayCandidates) {
+            reportDiagnostic({
+              eventType: "ice_relay_found",
+              details: `${userId.substring(0, 8)} via ${event.candidate.protocol} (${event.candidate.relatedAddress || 'no-related'})`,
+              iceConfig: peerCurrentConfigRef.current.get(userId),
+            });
+          }
           hasRelayCandidates = true;
           clearTimeout(candidateTimeout);
           addDebugLog(`✅ TURN relay candidate found for ${userId}!`);
@@ -483,6 +502,18 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       } else if (!event.candidate) {
         addDebugLog(`✅ ICE gathering complete for ${userId}`);
         clearTimeout(candidateTimeout);
+        const stats = peerCandidateStatsRef.current.get(userId);
+        if (stats) {
+          addDebugLog(`  └─ Gathered: host=${stats.host} srflx=${stats.srflx} relay=${stats.relay}`);
+          reportDiagnostic({
+            eventType: "ice_gathering_complete",
+            details: `${userId.substring(0, 8)} host=${stats.host} srflx=${stats.srflx} relay=${stats.relay}`,
+            iceConfig: peerCurrentConfigRef.current.get(userId),
+          });
+          if (stats.relay === 0) {
+            addDebugLog(`⚠️ No TURN relay candidates for ${userId} — TURN server unreachable or auth failed`);
+          }
+        }
       }
     };
 
@@ -503,22 +534,40 @@ export default function VideoCall({ roomId }: VideoCallProps) {
         const irt = iceRestartTimersRef.current.get(userId);
         if (irt) { clearTimeout(irt); iceRestartTimersRef.current.delete(userId); }
         // Determine which config was used — save for future peers
-        const currentConfigKey = workingIceConfigRef.current || selectedRegionRef.current;
+        const currentConfigKey = peerCurrentConfigRef.current.get(userId)
+          || workingIceConfigRef.current
+          || selectedRegionRef.current;
         workingIceConfigRef.current = currentConfigKey;
-        reportDiagnostic({
-          eventType: "peer_connected",
-          details: `Connected to ${userId.substring(0, 8)}`,
-          iceConfig: currentConfigKey,
-        });
         // Clear disconnect timer if any
         const dt = disconnectTimersRef.current.get(userId);
         if (dt) { clearTimeout(dt); disconnectTimersRef.current.delete(userId); }
-        // Log selected candidate pair
+        // Log selected candidate pair and resolve its types for telemetry
         peerConnection.getStats().then(stats => {
+          // RTCIceCandidateStats isn't in lib.dom — use a structural type
+          type CandidateStat = { candidateType?: string; protocol?: string };
+          let local: CandidateStat | undefined;
+          let remote: CandidateStat | undefined;
           stats.forEach(stat => {
-            if (stat.type === 'candidate-pair' && stat.state === 'succeeded') {
-              addDebugLog(`  └─ Using ICE pair: ${stat.localCandidateId} ↔ ${stat.remoteCandidateId}`);
+            if (stat.type === 'candidate-pair' && (stat as RTCIceCandidatePairStats).state === 'succeeded' && (stat as RTCIceCandidatePairStats).nominated) {
+              const pair = stat as RTCIceCandidatePairStats;
+              local = stats.get(pair.localCandidateId) as CandidateStat | undefined;
+              remote = stats.get(pair.remoteCandidateId) as CandidateStat | undefined;
             }
+          });
+          const localType = local?.candidateType || 'unknown';
+          const remoteType = remote?.candidateType || 'unknown';
+          const protocol = local?.protocol || '?';
+          addDebugLog(`  └─ Winning pair: ${localType}/${protocol} ↔ ${remoteType}`);
+          reportDiagnostic({
+            eventType: "peer_connected",
+            details: `${userId.substring(0, 8)} pair=${localType}↔${remoteType} proto=${protocol}`,
+            iceConfig: currentConfigKey,
+          });
+        }).catch(() => {
+          reportDiagnostic({
+            eventType: "peer_connected",
+            details: `Connected to ${userId.substring(0, 8)}`,
+            iceConfig: currentConfigKey,
           });
         });
       } else if (peerConnection.connectionState === "failed") {
@@ -642,14 +691,20 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       return;
     }
 
-    // Build rotation order: working config first (if any), then the rest
-    const order = workingIceConfigRef.current
-      ? [workingIceConfigRef.current, ...ICE_ROTATION_ORDER.filter(k => k !== workingIceConfigRef.current)]
-      : [...ICE_ROTATION_ORDER];
+    // Build rotation order excluding the config that just failed for this peer
+    const failedConfig = peerCurrentConfigRef.current.get(userId);
+    const order = ICE_ROTATION_ORDER.filter(k => k !== failedConfig);
 
     if (attempt > order.length) {
-      addDebugLog(`❌ All ICE configs exhausted for ${userId} after ${attempt - 1} attempts`);
-      reportDiagnostic({ eventType: "peer_failed", details: `All ICE configs exhausted for ${userId.substring(0, 8)}` });
+      // Report stats so we can see why no config worked
+      const stats = peerCandidateStatsRef.current.get(userId);
+      const statsStr = stats ? `host=${stats.host} srflx=${stats.srflx} relay=${stats.relay}` : 'no stats';
+      addDebugLog(`❌ All ICE configs exhausted for ${userId} after ${attempt - 1} attempts (${statsStr})`);
+      reportDiagnostic({
+        eventType: "peer_failed",
+        details: `All ICE configs exhausted for ${userId.substring(0, 8)} (${statsStr})`,
+        iceConfig: failedConfig,
+      });
       removePeer(userId);
       return;
     }
@@ -660,10 +715,12 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     const jitter = Math.random() * baseDelay * 0.3;
     const delay = Math.round(baseDelay + jitter);
 
-    addDebugLog(`🔄 ICE fallback ${attempt}/${order.length} for ${userId}: trying ${ICE_SERVER_CONFIGS[nextConfigKey].name} in ${delay}ms`);
+    const failedStats = peerCandidateStatsRef.current.get(userId);
+    const failedStatsStr = failedStats ? `host=${failedStats.host} srflx=${failedStats.srflx} relay=${failedStats.relay}` : '';
+    addDebugLog(`🔄 ICE fallback ${attempt}/${order.length} for ${userId}: ${failedConfig || '?'} → ${ICE_SERVER_CONFIGS[nextConfigKey].name} in ${delay}ms (${failedStatsStr})`);
     reportDiagnostic({
       eventType: "ice_fallback",
-      details: `Attempt ${attempt} for ${userId.substring(0, 8)}: ${nextConfigKey}`,
+      details: `Attempt ${attempt} for ${userId.substring(0, 8)}: ${failedConfig || '?'} → ${nextConfigKey} (${failedStatsStr})`,
       iceConfig: nextConfigKey,
     });
 
@@ -678,7 +735,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     setTimeout(() => {
       if (!socketRef.current?.connected) return;
       const nextConfig = getIceConfig(nextConfigKey);
-      createPeerConnection(userId, true, nextConfig);
+      createPeerConnection(userId, true, nextConfig, nextConfigKey);
     }, delay);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addDebugLog, getIceConfig, createPeerConnection, attemptIceRestart]);
@@ -755,6 +812,8 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     peerIceAttemptRef.current.delete(userId);
     iceRestartAttemptsRef.current.delete(userId);
     totalReconnectAttemptsRef.current.delete(userId);
+    peerCurrentConfigRef.current.delete(userId);
+    peerCandidateStatsRef.current.delete(userId);
     monitorRef.current?.removePeer(userId);
     const irt = iceRestartTimersRef.current.get(userId);
     if (irt) { clearTimeout(irt); iceRestartTimersRef.current.delete(userId); }
@@ -781,19 +840,38 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     peerIceAttemptRef.current.clear();
     iceRestartAttemptsRef.current.clear();
     totalReconnectAttemptsRef.current.clear();
+    peerCurrentConfigRef.current.clear();
+    peerCandidateStatsRef.current.clear();
     iceRestartTimersRef.current.forEach(t => clearTimeout(t));
     iceRestartTimersRef.current.clear();
     disconnectTimersRef.current.forEach(t => clearTimeout(t));
     disconnectTimersRef.current.clear();
     abcRef.current?.destroy();
     abcRef.current = null;
+    if (reacquireTimerRef.current) {
+      clearTimeout(reacquireTimerRef.current);
+      reacquireTimerRef.current = null;
+    }
+    reacquireAttemptsRef.current = 0;
   }, []);
 
   // ─── Re-acquire video track (iOS Safari kills video in background) ─
   const reacquireVideo = useCallback(async () => {
+    // Hard cap on retries — getUserMedia from a hidden tab fails silently;
+    // without this, track.onended handlers ping-pong forever.
+    if (reacquireAttemptsRef.current >= 3) {
+      addDebugLog(`⚠️ reacquireVideo: max attempts reached, giving up — tap camera button to retry`);
+      setIsVideoEnabled(false);
+      return;
+    }
+    if (document.visibilityState !== 'visible') {
+      addDebugLog(`⏸️ reacquireVideo: page hidden, deferring`);
+      return;
+    }
+    reacquireAttemptsRef.current += 1;
     try {
-      addDebugLog("🔄 Re-acquiring video track...");
-      reportDiagnostic({ eventType: "track_reacquiring", details: "Attempting to re-acquire video track" });
+      addDebugLog(`🔄 Re-acquiring video track... (attempt ${reacquireAttemptsRef.current}/3)`);
+      reportDiagnostic({ eventType: "track_reacquiring", details: `Attempt ${reacquireAttemptsRef.current}` });
       const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
       const newVideoTrack = newStream.getVideoTracks()[0];
       if (!newVideoTrack) return;
@@ -830,11 +908,12 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       };
 
       setIsVideoEnabled(true);
+      reacquireAttemptsRef.current = 0; // success — reset counter for future detachments
       addDebugLog("✅ Video track re-acquired successfully");
       reportDiagnostic({ eventType: "track_reacquired", details: `Video track re-acquired: ${newVideoTrack.label}` });
     } catch (err: any) {
-      addDebugLog(`❌ Failed to re-acquire video: ${err.message}`);
-      reportDiagnostic({ eventType: "track_reacquire_failed", details: err.message });
+      addDebugLog(`❌ Failed to re-acquire video (attempt ${reacquireAttemptsRef.current}/3): ${err.message}`);
+      reportDiagnostic({ eventType: "track_reacquire_failed", details: `Attempt ${reacquireAttemptsRef.current}: ${err.message}` });
       setIsVideoEnabled(false);
     }
   }, [addDebugLog]);
@@ -1033,11 +1112,26 @@ export default function VideoCall({ roomId }: VideoCallProps) {
 
     init();
 
-    // Handle iOS Safari background/foreground: video track can die
-    // when the tab loses visibility, while audio keeps working.
+    // Handle background/foreground: iOS Safari kills video tracks; desktop
+    // Chrome pauses <video> elements in hidden tabs and doesn't always resume.
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Check local video track
+      if (document.visibilityState !== 'visible') return;
+
+      // Resume any paused <video> elements (Chrome pauses them when tab hides)
+      const resumeVideo = (el: HTMLVideoElement | null) => {
+        if (!el) return;
+        if (el.paused) el.play().catch(() => {});
+      };
+      resumeVideo(localVideoRef.current);
+      remoteVideosRef.current.forEach(resumeVideo);
+
+      // iOS may have killed the local video track — give the browser a moment
+      // to settle (it sometimes refuses getUserMedia for ~500ms after unhide)
+      // then re-acquire.
+      if (reacquireTimerRef.current) clearTimeout(reacquireTimerRef.current);
+      reacquireTimerRef.current = setTimeout(() => {
+        reacquireTimerRef.current = null;
+        if (document.visibilityState !== 'visible') return;
         if (localStreamRef.current) {
           const videoTrack = localStreamRef.current.getVideoTracks()[0];
           if (videoTrack && videoTrack.readyState === 'ended') {
@@ -1045,15 +1139,16 @@ export default function VideoCall({ roomId }: VideoCallProps) {
             reacquireVideo();
           }
         }
-        // Check peer connections and restart ICE if degraded
-        peersRef.current.forEach((peer, peerId) => {
-          if (peer.connection.iceConnectionState !== 'connected'
-              && peer.connection.iceConnectionState !== 'completed') {
-            addDebugLog(`🔄 Peer ${peerId.substring(0, 8)} degraded after background — restarting ICE`);
-            attemptIceRestart(peerId);
-          }
-        });
-      }
+      }, 500);
+
+      // Check peer connections and restart ICE if degraded
+      peersRef.current.forEach((peer, peerId) => {
+        if (peer.connection.iceConnectionState !== 'connected'
+            && peer.connection.iceConnectionState !== 'completed') {
+          addDebugLog(`🔄 Peer ${peerId.substring(0, 8)} degraded after background — restarting ICE`);
+          attemptIceRestart(peerId);
+        }
+      });
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -1167,10 +1262,16 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   const toggleVideo = () => {
     if (localStreamRef.current) {
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoEnabled(videoTrack.enabled);
+      // Track died (e.g. iOS killed it in background and reacquire gave up)
+      // — a tap counts as a user gesture, so getUserMedia will succeed here
+      // when it kept failing in the background reacquire loop.
+      if (!videoTrack || videoTrack.readyState === 'ended') {
+        reacquireAttemptsRef.current = 0;
+        reacquireVideo();
+        return;
       }
+      videoTrack.enabled = !videoTrack.enabled;
+      setIsVideoEnabled(videoTrack.enabled);
     }
   };
 
@@ -1274,8 +1375,10 @@ export default function VideoCall({ roomId }: VideoCallProps) {
         ) : (
           <MuiBox sx={{
             height: "100%",
+            minHeight: 0,
             display: "grid",
             gridTemplateColumns: { xs: gridCols <= 2 ? `repeat(1, 1fr)` : `repeat(2, 1fr)`, sm: `repeat(${gridCols}, 1fr)` },
+            gridAutoRows: "1fr",
             gap: { xs: 1, sm: 1.5, md: 2 },
           }}>
             {!hideMyVideo && (
