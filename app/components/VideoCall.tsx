@@ -918,6 +918,105 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     }
   }, [addDebugLog]);
 
+  // ─── Switch to next available camera (front/back on mobile, cycle on desktop) ─
+  const [videoInputCount, setVideoInputCount] = useState<number>(0);
+  const switchCamera = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter(d => d.kind === 'videoinput');
+      setVideoInputCount(videoInputs.length);
+      if (videoInputs.length < 2) {
+        addDebugLog(`📷 Only ${videoInputs.length} camera(s) available — can't switch`);
+        return;
+      }
+
+      const currentTrack = localStreamRef.current?.getVideoTracks()[0];
+      const currentDeviceId = currentTrack?.getSettings().deviceId;
+
+      // Pick next device in the list (cycle around)
+      const currentIndex = videoInputs.findIndex(d => d.deviceId === currentDeviceId);
+      const nextIndex = (currentIndex + 1) % videoInputs.length;
+      const nextDevice = videoInputs[nextIndex];
+
+      addDebugLog(`📷 Switching camera: ${currentTrack?.label || '?'} → ${nextDevice.label || nextDevice.deviceId.substring(0, 6)}`);
+      reportDiagnostic({ eventType: "camera_switching", details: `${currentDeviceId?.substring(0, 6)} → ${nextDevice.deviceId.substring(0, 6)}` });
+
+      // Stop the old track BEFORE requesting a new one — iOS Safari can only
+      // hold one camera at a time, and getUserMedia will reject otherwise.
+      if (currentTrack && localStreamRef.current) {
+        localStreamRef.current.removeTrack(currentTrack);
+        currentTrack.stop();
+      }
+
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: { exact: nextDevice.deviceId },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+      });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) {
+        addDebugLog(`❌ No video track in new stream`);
+        return;
+      }
+
+      if (localStreamRef.current) {
+        localStreamRef.current.addTrack(newVideoTrack);
+      }
+      if (localVideoRef.current && localStreamRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current;
+        localVideoRef.current.play().catch(() => {});
+      }
+
+      // Replace the track in every peer connection without renegotiating
+      peersRef.current.forEach((peer, peerId) => {
+        const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) {
+          sender.replaceTrack(newVideoTrack).catch(err => {
+            addDebugLog(`⚠️ replaceTrack failed for ${peerId.substring(0, 8)}: ${err.message}`);
+          });
+        }
+      });
+
+      // Monitor the new track for unexpected ending
+      newVideoTrack.onended = () => {
+        addDebugLog("⚠️ Camera track ended after switch");
+        reportDiagnostic({ eventType: "track_ended", details: "After camera switch" });
+        reacquireVideo();
+      };
+
+      setIsVideoEnabled(true);
+      reacquireAttemptsRef.current = 0;
+      addDebugLog(`✅ Switched to camera: ${newVideoTrack.label}`);
+      reportDiagnostic({ eventType: "camera_switched", details: newVideoTrack.label });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addDebugLog(`❌ Switch camera failed: ${msg}`);
+      reportDiagnostic({ eventType: "camera_switch_failed", details: msg });
+    }
+  }, [addDebugLog, reacquireVideo]);
+
+  // Detect how many cameras are available so the UI can hide the switch
+  // button when there's only one.
+  useEffect(() => {
+    const detect = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === 'videoinput').length;
+        setVideoInputCount(cams);
+      } catch {
+        setVideoInputCount(0);
+      }
+    };
+    detect();
+    navigator.mediaDevices?.addEventListener?.('devicechange', detect);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', detect);
+    };
+  }, []);
+
   // ─── Monitor tracks for unexpected ending ─────────────────────────
   const setupTrackMonitoring = useCallback((stream: MediaStream) => {
     stream.getVideoTracks().forEach(track => {
@@ -1445,6 +1544,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
           hideMyVideo={hideMyVideo}
           onToggleHideMyVideo={() => setHideMyVideo(!hideMyVideo)}
           participantCount={participantCount}
+          onSwitchCamera={videoInputCount > 1 ? switchCamera : undefined}
         />
       </MuiPaper>
 

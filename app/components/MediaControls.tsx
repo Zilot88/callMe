@@ -10,6 +10,7 @@ import VideocamOffIcon from "@mui/icons-material/VideocamOff";
 import CallEndIcon from "@mui/icons-material/CallEnd";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import FlipCameraIosIcon from "@mui/icons-material/FlipCameraIos";
 import { useTranslation } from "../lib/i18n";
 
 interface MediaControlsProps {
@@ -22,6 +23,8 @@ interface MediaControlsProps {
   hideMyVideo?: boolean;
   onToggleHideMyVideo?: () => void;
   participantCount?: number;
+  /** Provided only when more than one camera is available */
+  onSwitchCamera?: () => void;
 }
 
 export default function MediaControls({
@@ -34,6 +37,7 @@ export default function MediaControls({
   hideMyVideo = false,
   onToggleHideMyVideo,
   participantCount = 1,
+  onSwitchCamera,
 }: MediaControlsProps) {
   const { t } = useTranslation();
   return (
@@ -73,6 +77,26 @@ export default function MediaControls({
           </IconButton>
         </span>
       </Tooltip>
+
+      {onSwitchCamera && (
+        <Tooltip title={t("camera.switch")}>
+          <span>
+            <IconButton
+              onClick={onSwitchCamera}
+              disabled={!isCallActive || !isVideoEnabled}
+              sx={{
+                width: 56, height: 56,
+                bgcolor: "grey.800",
+                color: "white",
+                "&:hover": { bgcolor: "grey.700" },
+                "&.Mui-disabled": { bgcolor: "grey.700", color: "grey.500" },
+              }}
+            >
+              <FlipCameraIosIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
 
       {participantCount > 1 && onToggleHideMyVideo && (
         <Tooltip title={hideMyVideo ? t("self.show") : t("self.hide")}>
