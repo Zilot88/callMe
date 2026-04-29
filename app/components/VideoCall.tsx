@@ -934,36 +934,53 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   // ─── Switch to next available camera (front/back on mobile, cycle on desktop) ─
   const [videoInputCount, setVideoInputCount] = useState<number>(0);
   const switchCamera = useCallback(async () => {
+    const currentTrack = localStreamRef.current?.getVideoTracks()[0];
+    if (!currentTrack) {
+      addDebugLog(`📷 No active video track to switch from`);
+      return;
+    }
+
+    // Determine next facingMode based on current settings.
+    // facingMode is the iOS/Android-friendly way: same camera permission
+    // covers both front and back, and Safari doesn't re-prompt.
+    const settings = currentTrack.getSettings();
+    const currentFacing = settings.facingMode as 'user' | 'environment' | undefined;
+    const nextFacing: 'user' | 'environment' =
+      currentFacing === 'user' ? 'environment'
+      : currentFacing === 'environment' ? 'user'
+      : 'environment'; // first switch defaults to back camera
+
+    addDebugLog(`📷 Switching camera: facingMode ${currentFacing || '?'} → ${nextFacing}`);
+    reportDiagnostic({ eventType: "camera_switching", details: `${currentFacing || '?'} → ${nextFacing}` });
+
+    // Path 1: applyConstraints on existing track. Fastest, no permission
+    // re-prompt, no SDP renegotiation. Works on Android Chrome and modern
+    // iOS Safari.
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoInputs = devices.filter(d => d.kind === 'videoinput');
-      setVideoInputCount(videoInputs.length);
-      if (videoInputs.length < 2) {
-        addDebugLog(`📷 Only ${videoInputs.length} camera(s) available — can't switch`);
+      await currentTrack.applyConstraints({ facingMode: { exact: nextFacing } });
+      const newSettings = currentTrack.getSettings();
+      if (newSettings.facingMode === nextFacing) {
+        addDebugLog(`✅ Switched via applyConstraints to ${nextFacing}`);
+        reportDiagnostic({ eventType: "camera_switched", details: `applyConstraints ${nextFacing}` });
         return;
       }
+      // applyConstraints succeeded but facingMode didn't change — fall through
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addDebugLog(`⏭️ applyConstraints didn't switch (${msg}) — trying getUserMedia path`);
+    }
 
-      const currentTrack = localStreamRef.current?.getVideoTracks()[0];
-      const currentDeviceId = currentTrack?.getSettings().deviceId;
-
-      // Pick next device in the list (cycle around)
-      const currentIndex = videoInputs.findIndex(d => d.deviceId === currentDeviceId);
-      const nextIndex = (currentIndex + 1) % videoInputs.length;
-      const nextDevice = videoInputs[nextIndex];
-
-      addDebugLog(`📷 Switching camera: ${currentTrack?.label || '?'} → ${nextDevice.label || nextDevice.deviceId.substring(0, 6)}`);
-      reportDiagnostic({ eventType: "camera_switching", details: `${currentDeviceId?.substring(0, 6)} → ${nextDevice.deviceId.substring(0, 6)}` });
-
-      // Stop the old track BEFORE requesting a new one — iOS Safari can only
-      // hold one camera at a time, and getUserMedia will reject otherwise.
-      if (currentTrack && localStreamRef.current) {
-        localStreamRef.current.removeTrack(currentTrack);
-        currentTrack.stop();
-      }
+    // Path 2: full re-acquisition with facingMode constraint. iOS Safari
+    // shares the camera permission across user/environment, so this
+    // typically does NOT trigger a new permission dialog.
+    try {
+      // Must stop old track first — iOS holds only one camera at a time.
+      if (localStreamRef.current) localStreamRef.current.removeTrack(currentTrack);
+      currentTrack.stop();
 
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          deviceId: { exact: nextDevice.deviceId },
+          facingMode: { exact: nextFacing },
           width: { ideal: 1280 },
           height: { ideal: 720 },
           frameRate: { ideal: 30, max: 30 },
@@ -975,15 +992,12 @@ export default function VideoCall({ roomId }: VideoCallProps) {
         return;
       }
 
-      if (localStreamRef.current) {
-        localStreamRef.current.addTrack(newVideoTrack);
-      }
+      if (localStreamRef.current) localStreamRef.current.addTrack(newVideoTrack);
       if (localVideoRef.current && localStreamRef.current) {
         localVideoRef.current.srcObject = localStreamRef.current;
         localVideoRef.current.play().catch(() => {});
       }
 
-      // Replace the track in every peer connection without renegotiating
       peersRef.current.forEach((peer, peerId) => {
         const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video');
         if (sender) {
@@ -993,7 +1007,6 @@ export default function VideoCall({ roomId }: VideoCallProps) {
         }
       });
 
-      // Monitor the new track for unexpected ending
       newVideoTrack.onended = () => {
         addDebugLog("⚠️ Camera track ended after switch");
         reportDiagnostic({ eventType: "track_ended", details: "After camera switch" });
@@ -1002,11 +1015,57 @@ export default function VideoCall({ roomId }: VideoCallProps) {
 
       setIsVideoEnabled(true);
       reacquireAttemptsRef.current = 0;
-      addDebugLog(`✅ Switched to camera: ${newVideoTrack.label}`);
-      reportDiagnostic({ eventType: "camera_switched", details: newVideoTrack.label });
+      addDebugLog(`✅ Switched via getUserMedia to ${newVideoTrack.label}`);
+      reportDiagnostic({ eventType: "camera_switched", details: `gUM ${nextFacing}: ${newVideoTrack.label}` });
+      return;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      addDebugLog(`❌ Switch camera failed: ${msg}`);
+      addDebugLog(`⏭️ facingMode getUserMedia failed (${msg}) — trying deviceId cycle`);
+    }
+
+    // Path 3: deviceId cycling — only useful on desktop with multiple
+    // webcams (no facingMode there). Last resort.
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter(d => d.kind === 'videoinput');
+      setVideoInputCount(videoInputs.length);
+      if (videoInputs.length < 2) {
+        addDebugLog(`📷 Only ${videoInputs.length} camera(s) available — can't cycle`);
+        return;
+      }
+      const currentDeviceId = settings.deviceId;
+      const currentIndex = videoInputs.findIndex(d => d.deviceId === currentDeviceId);
+      const nextIndex = (currentIndex + 1) % videoInputs.length;
+      const nextDevice = videoInputs[nextIndex];
+
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: { exact: nextDevice.deviceId },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+      });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) return;
+
+      if (localStreamRef.current) localStreamRef.current.addTrack(newVideoTrack);
+      if (localVideoRef.current && localStreamRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current;
+        localVideoRef.current.play().catch(() => {});
+      }
+      peersRef.current.forEach((peer) => {
+        const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) sender.replaceTrack(newVideoTrack).catch(() => {});
+      });
+      newVideoTrack.onended = () => reacquireVideo();
+      setIsVideoEnabled(true);
+      reacquireAttemptsRef.current = 0;
+      addDebugLog(`✅ Switched via deviceId cycle to ${newVideoTrack.label}`);
+      reportDiagnostic({ eventType: "camera_switched", details: `deviceId: ${newVideoTrack.label}` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addDebugLog(`❌ All camera switch paths failed: ${msg}`);
       reportDiagnostic({ eventType: "camera_switch_failed", details: msg });
     }
   }, [addDebugLog, reacquireVideo]);
