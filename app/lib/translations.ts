@@ -22,6 +22,8 @@ export const translations = {
   "self.hide": { en: "Hide your video", ru: "Скрыть своё видео" },
   "self.show": { en: "Show your video", ru: "Показать своё видео" },
   "camera.switch": { en: "Switch camera", ru: "Сменить камеру" },
+  "speaker.on": { en: "Mute speakers", ru: "Выключить звук" },
+  "speaker.off": { en: "Unmute speakers", ru: "Включить звук" },
   "call.end": { en: "End call", ru: "Завершить звонок" },
 
   // ─── Video call ───────────────────────────────────────────────────

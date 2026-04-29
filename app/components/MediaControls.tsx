@@ -11,6 +11,8 @@ import CallEndIcon from "@mui/icons-material/CallEnd";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import FlipCameraIosIcon from "@mui/icons-material/FlipCameraIos";
+import VolumeUpIcon from "@mui/icons-material/VolumeUp";
+import VolumeOffIcon from "@mui/icons-material/VolumeOff";
 import { useTranslation } from "../lib/i18n";
 
 interface MediaControlsProps {
@@ -25,6 +27,9 @@ interface MediaControlsProps {
   participantCount?: number;
   /** Provided only when more than one camera is available */
   onSwitchCamera?: () => void;
+  /** Local playback of remote audio. true = audio audible. */
+  isSpeakerEnabled?: boolean;
+  onToggleSpeaker?: () => void;
 }
 
 export default function MediaControls({
@@ -38,6 +43,8 @@ export default function MediaControls({
   onToggleHideMyVideo,
   participantCount = 1,
   onSwitchCamera,
+  isSpeakerEnabled = true,
+  onToggleSpeaker,
 }: MediaControlsProps) {
   const { t } = useTranslation();
   return (
@@ -77,6 +84,26 @@ export default function MediaControls({
           </IconButton>
         </span>
       </Tooltip>
+
+      {onToggleSpeaker && (
+        <Tooltip title={isSpeakerEnabled ? t("speaker.on") : t("speaker.off")}>
+          <span>
+            <IconButton
+              onClick={onToggleSpeaker}
+              disabled={!isCallActive}
+              sx={{
+                width: 56, height: 56,
+                bgcolor: isSpeakerEnabled ? "primary.main" : "error.main",
+                color: "white",
+                "&:hover": { bgcolor: isSpeakerEnabled ? "primary.dark" : "error.dark" },
+                "&.Mui-disabled": { bgcolor: "grey.700", color: "grey.500" },
+              }}
+            >
+              {isSpeakerEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
 
       {onSwitchCamera && (
         <Tooltip title={t("camera.switch")}>

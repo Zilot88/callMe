@@ -206,6 +206,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   const [selectedRegion, setSelectedRegion] = useState<keyof typeof ICE_SERVER_CONFIGS>("metered");
   const [meteredIceServers, setMeteredIceServers] = useState<RTCConfiguration | null>(null);
   const [hideMyVideo, setHideMyVideo] = useState<boolean>(false);
+  const [isSpeakerEnabled, setIsSpeakerEnabled] = useState<boolean>(true);
   const [currentPreset, setCurrentPreset] = useState<VideoQualityPreset>('high');
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -257,6 +258,18 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   useEffect(() => {
     abcRef.current?.setParticipantCount(participantCount);
   }, [participantCount]);
+
+  // Speaker toggle — mutes local playback of every remote <video>
+  // (does not stop sending audio TO peers — see toggleAudio for that).
+  const isSpeakerEnabledRef = useRef(isSpeakerEnabled);
+  isSpeakerEnabledRef.current = isSpeakerEnabled;
+  useEffect(() => {
+    remoteVideosRef.current.forEach(el => {
+      el.muted = !isSpeakerEnabled;
+      // After unmuting, browser may need an explicit play() to resume audio
+      if (isSpeakerEnabled && el.paused) el.play().catch(() => {});
+    });
+  }, [isSpeakerEnabled]);
 
   // Debug helper
   const addDebugLog = useCallback((message: string) => {
@@ -769,7 +782,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       videoElement = document.createElement("video");
       videoElement.autoplay = true;
       videoElement.playsInline = true;
-      videoElement.muted = false;
+      videoElement.muted = !isSpeakerEnabledRef.current;
       videoElement.style.cssText = "width:100%;height:100%;object-fit:cover";
       videoElement.srcObject = stream;
       videoElement.play().catch(() => {});
@@ -1359,19 +1372,23 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   };
 
   const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      // Track died (e.g. iOS killed it in background and reacquire gave up)
-      // — a tap counts as a user gesture, so getUserMedia will succeed here
-      // when it kept failing in the background reacquire loop.
-      if (!videoTrack || videoTrack.readyState === 'ended') {
-        reacquireAttemptsRef.current = 0;
-        reacquireVideo();
-        return;
-      }
-      videoTrack.enabled = !videoTrack.enabled;
-      setIsVideoEnabled(videoTrack.enabled);
+    // No stream at all — initial getUserMedia failed (e.g. permission denied
+    // on a previous attempt). User-gesture tap is the right context to retry.
+    if (!localStreamRef.current) {
+      requestMediaPermissions();
+      return;
     }
+    const videoTrack = localStreamRef.current.getVideoTracks()[0];
+    // Track died (e.g. iOS killed it in background and reacquire gave up)
+    // — a tap counts as a user gesture, so getUserMedia will succeed here
+    // when it kept failing in the background reacquire loop.
+    if (!videoTrack || videoTrack.readyState === 'ended') {
+      reacquireAttemptsRef.current = 0;
+      reacquireVideo();
+      return;
+    }
+    videoTrack.enabled = !videoTrack.enabled;
+    setIsVideoEnabled(videoTrack.enabled);
   };
 
   const endCall = () => {
@@ -1441,7 +1458,8 @@ export default function VideoCall({ roomId }: VideoCallProps) {
             </MuiSelect>
           </MuiFormControl>
 
-          {/* Media permissions button — hidden on mobile */}
+          {/* Media permissions button — hidden on mobile (camera button calls
+              getUserMedia on tap when no stream exists) */}
           <MuiButton size="small" variant="outlined" onClick={requestMediaPermissions} sx={{ fontSize: 11, minWidth: 0, px: 1.5, display: { xs: "none", sm: "inline-flex" } }}>
             {t("video.media_btn")}
           </MuiButton>
@@ -1487,10 +1505,10 @@ export default function VideoCall({ roomId }: VideoCallProps) {
             minHeight: "100%",
             display: "grid",
             gridTemplateColumns: { xs: gridCols <= 2 ? `repeat(1, 1fr)` : `repeat(2, 1fr)`, sm: `repeat(${gridCols}, 1fr)` },
-            // Rows: at least 180px tall (mobile) / 220px (desktop), expand
-            // to fill height when participants fit. When they don't fit —
-            // parent scrolls instead of squishing tiles to nothing.
-            gridAutoRows: { xs: "minmax(180px, 1fr)", sm: "minmax(220px, 1fr)" },
+            // Rows: tall minimum so tiles stay readable on phones — when
+            // they don't fit, parent scrolls. iPhone 13 portrait fits 2
+            // rows comfortably; 3+ kicks in vertical scroll automatically.
+            gridAutoRows: { xs: "minmax(240px, 1fr)", sm: "minmax(280px, 1fr)" },
             gap: { xs: 1, sm: 1.5, md: 2 },
           }}>
             {!hideMyVideo && (
@@ -1545,6 +1563,8 @@ export default function VideoCall({ roomId }: VideoCallProps) {
           onToggleHideMyVideo={() => setHideMyVideo(!hideMyVideo)}
           participantCount={participantCount}
           onSwitchCamera={videoInputCount > 1 ? switchCamera : undefined}
+          isSpeakerEnabled={isSpeakerEnabled}
+          onToggleSpeaker={() => setIsSpeakerEnabled(v => !v)}
         />
       </MuiPaper>
 
