@@ -1301,19 +1301,29 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     <MuiBox sx={{ height: "100vh", display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
       {/* Top Header */}
       <MuiAppBar position="static" sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
-        <MuiToolbar variant="dense" sx={{ gap: 1, flexWrap: "wrap", py: 1 }}>
-          <MuiIconButton href="/" size="small" sx={{ color: "grey.400" }}>
+        <MuiToolbar variant="dense" sx={{ gap: { xs: 0.5, sm: 1 }, py: { xs: 0.25, sm: 1 }, minHeight: { xs: 44, sm: 48 } }}>
+          <MuiIconButton href="/" size="small" sx={{ color: "grey.400", p: { xs: 0.5, sm: 1 } }}>
             <span style={{ fontSize: 18 }}>&#x2190;</span>
           </MuiIconButton>
 
-          <QualityIndicator level={overallLevel} preset={currentPreset} showLabel size="sm" />
+          {/* Quality dot — label only on sm+ to save space */}
+          <MuiBox sx={{ display: { xs: "none", sm: "flex" } }}>
+            <QualityIndicator level={overallLevel} preset={currentPreset} showLabel size="sm" />
+          </MuiBox>
+          <MuiBox sx={{ display: { xs: "flex", sm: "none" } }}>
+            <QualityIndicator level={overallLevel} preset={currentPreset} showLabel={false} size="sm" />
+          </MuiBox>
 
-          <MuiTypography variant="body2" sx={{ color: "grey.300", flexGrow: 1 }}>
+          {/* Status text — desktop only, takes flex space */}
+          <MuiTypography variant="body2" sx={{ color: "grey.300", flexGrow: 1, display: { xs: "none", sm: "block" }, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {connectionStatus}
-            <MuiChip label={participantCount} size="small" sx={{ ml: 1, height: 20, fontSize: 11 }} />
           </MuiTypography>
+          {/* On mobile, just spacer + participant chip */}
+          <MuiBox sx={{ flexGrow: 1, display: { xs: "block", sm: "none" } }} />
+          <MuiChip label={participantCount} size="small" sx={{ height: 20, fontSize: 11 }} />
 
-          <MuiFormControl size="small" sx={{ minWidth: 140 }}>
+          {/* Advanced ICE region selector — hidden on mobile (use Debug panel) */}
+          <MuiFormControl size="small" sx={{ minWidth: 140, display: { xs: "none", md: "flex" } }}>
             <MuiSelect
               value={selectedRegion}
               onChange={(e: { target: { value: string } }) => {
@@ -1332,14 +1342,15 @@ export default function VideoCall({ roomId }: VideoCallProps) {
             </MuiSelect>
           </MuiFormControl>
 
-          <MuiButton size="small" variant="outlined" onClick={requestMediaPermissions} sx={{ fontSize: 11, minWidth: 0, px: 1.5 }}>
+          {/* Media permissions button — hidden on mobile */}
+          <MuiButton size="small" variant="outlined" onClick={requestMediaPermissions} sx={{ fontSize: 11, minWidth: 0, px: 1.5, display: { xs: "none", sm: "inline-flex" } }}>
             {t("video.media_btn")}
           </MuiButton>
 
-          <ShareLinkButton size="small" variant="outlined" />
+          <ShareLinkButton size="small" variant="outlined" iconOnly={{ xs: true, sm: false }} />
 
           <MuiTooltip title={showDebug ? "Скрыть Debug" : "Debug"}>
-            <MuiIconButton size="small" onClick={() => setShowDebug(!showDebug)} sx={{ color: "grey.400" }}>
+            <MuiIconButton size="small" onClick={() => setShowDebug(!showDebug)} sx={{ color: "grey.400", p: { xs: 0.5, sm: 1 } }}>
               <span style={{ fontSize: 16 }}>&#x1F41B;</span>
             </MuiIconButton>
           </MuiTooltip>
