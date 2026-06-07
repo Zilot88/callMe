@@ -8,7 +8,9 @@ import { NextResponse } from 'next/server';
 // `apiKey` used to generate credentials. Set METERED_SECRET_KEY if so;
 // otherwise we fall back to METERED_API_KEY.
 
-const METERED_APP = 'callme'; // <appname>.metered.live — matches turn-credentials
+// <appname>.metered.live — must match the account the key belongs to (else 401).
+// Override via METERED_DOMAIN. Keep in sync with turn-credentials route.
+const METERED_APP = process.env.METERED_DOMAIN || 'olikirolli';
 
 export async function GET() {
   const key = process.env.METERED_SECRET_KEY || process.env.METERED_API_KEY;

@@ -18,7 +18,9 @@ const STUN_SERVERS: IceServer[] = [
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
-const METERED_APP = 'callme'; // <appname>.metered.live
+// Your Metered app subdomain: <appname>.metered.live. MUST match the account
+// the API key belongs to, or Metered returns 401. Override via METERED_DOMAIN.
+const METERED_APP = process.env.METERED_DOMAIN || 'olikirolli';
 
 async function getMeteredIceServers(): Promise<IceServer[]> {
   const apiKey = process.env.METERED_API_KEY;
