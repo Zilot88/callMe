@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import VideoCallErrorBoundary from "../../components/ErrorBoundary";
+import InAppBrowserGate from "../../components/InAppBrowserGate";
 import { reportDiagnostic } from "../../lib/diagnostics";
 import { useTranslation } from "../../lib/i18n";
 import Box from "@mui/material/Box";
@@ -63,6 +64,7 @@ export default function CallPage({ params }: { params: Promise<{ roomId: string 
 
   return (
     <VideoCallErrorBoundary>
+      <InAppBrowserGate />
       <VideoCall roomId={roomId} />
     </VideoCallErrorBoundary>
   );

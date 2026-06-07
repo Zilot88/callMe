@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import MediaControls from "./MediaControls";
 import DebugPanel from "./DebugPanel";
-import QualityIndicator, { getQualityDotColor } from "./QualityIndicator";
+import { getQualityDotColor } from "./QualityIndicator";
 import { reportDiagnostic } from "../lib/diagnostics";
 import { useConnectionQuality } from "../hooks/useConnectionQuality";
 import { ConnectionQualityMonitor } from "../lib/connection-quality";
@@ -22,172 +22,17 @@ interface PeerConnection {
   heartbeat?: PeerHeartbeat;
 }
 
-// ICE Server configurations for different regions
-const ICE_SERVER_CONFIGS = {
-  global: {
-    name: "🌐 Глобальные",
-    config: {
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" },
-        { urls: "stun:stun.cloudflare.com:3478" },
-        { urls: "stun:global.stun.twilio.com:3478" },
-        { urls: "stun:stun.ekiga.net" },
-        { urls: "stun:stun.schlund.de" },
-        { urls: "stun:stun.voiparound.com" },
-        { urls: "stun:stun.sipgate.net" },
-        {
-          urls: "turn:freeturn.net:3478",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turn:freeturn.net:5349",
-          username: "free",
-          credential: "free",
-        },
-      ],
-    } as RTCConfiguration,
-  },
-  neutral: {
-    name: "🌏 Нейтральные",
-    config: {
-      iceServers: [
-        { urls: "stun:stun1.cht.com.net:3478" },
-        { urls: "stun:s1.voipstation.jp:3478" },
-        { urls: "stun:s2.voipstation.jp:3478" },
-        { urls: "stun:stun.cloudflare.com:3478" },
-        { urls: "stun:stun.sipnet.net:3478" },
-        { urls: "stun:stun.voipgate.com:3478" },
-        { urls: "stun:stunserver.org:3478" },
-        { urls: "stun:stun.voiparound.com" },
-        { urls: "stun:stun.voipbuster.com" },
-        { urls: "stun:stun.voipstunt.com" },
-        {
-          urls: "turn:freeturn.net:3478",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turn:freeturn.net:5349",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turns:freeturn.net:5349",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turn:freestun.net:3478",
-          username: "free",
-          credential: "free",
-        },
-      ],
-    } as RTCConfiguration,
-  },
-  europe: {
-    name: "🇪🇺 Европа",
-    config: {
-      iceServers: [
-        { urls: "stun:stun.cloudflare.com:3478" },
-        { urls: "stun:stun.ekiga.net" },
-        { urls: "stun:stun.ideasip.com" },
-        { urls: "stun:stun.schlund.de" },
-        { urls: "stun:stun.voiparound.com" },
-        { urls: "stun:stun.voipbuster.com" },
-        { urls: "stun:stun.sipgate.net" },
-        { urls: "stun:stun.stunprotocol.org:3478" },
-        {
-          urls: "turn:freeturn.net:3478",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turn:freeturn.net:5349",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turns:freeturn.net:5349",
-          username: "free",
-          credential: "free",
-        },
-      ],
-    } as RTCConfiguration,
-  },
-  turnOnly: {
-    name: "🔒 Только TURN",
-    config: {
-      iceServers: [
-        {
-          urls: "turn:numb.viagenie.ca",
-          username: "webrtc@live.com",
-          credential: "muazkh",
-        },
-        {
-          urls: "turn:freeturn.net:3478",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turn:freeturn.net:5349",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turns:freeturn.net:5349",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turn:freestun.net:3478",
-          username: "free",
-          credential: "free",
-        },
-        {
-          urls: "turn:freestun.net:5349",
-          username: "free",
-          credential: "free",
-        },
-      ],
-    } as RTCConfiguration,
-  },
-  metered: {
-    name: "⭐ Metered (20GB)",
-    config: {
-      iceServers: [
-        { urls: "stun:stun.relay.metered.ca:80" },
-        {
-          urls: "turn:global.relay.metered.ca:80",
-          username: "cbf0ad6518714f46c139ebe6",
-          credential: "nkmonuq3beg/U+ws",
-        },
-        {
-          urls: "turn:global.relay.metered.ca:80?transport=tcp",
-          username: "cbf0ad6518714f46c139ebe6",
-          credential: "nkmonuq3beg/U+ws",
-        },
-        {
-          urls: "turn:global.relay.metered.ca:443",
-          username: "cbf0ad6518714f46c139ebe6",
-          credential: "nkmonuq3beg/U+ws",
-        },
-        {
-          urls: "turns:global.relay.metered.ca:443?transport=tcp",
-          username: "cbf0ad6518714f46c139ebe6",
-          credential: "nkmonuq3beg/U+ws",
-        },
-      ],
-    } as RTCConfiguration,
-  },
+// Fallback STUN-only config, used only if /api/turn-credentials fails to load.
+// STUN is free (no relay traffic) and lets most calls connect directly P2P,
+// conserving the Metered TURN quota. The real ICE config (Metered TURN + STUN)
+// is fetched at runtime from /api/turn-credentials into `meteredIceServers`.
+const FALLBACK_ICE_CONFIG: RTCConfiguration = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun.cloudflare.com:3478" },
+  ],
 };
-
-// Order for auto-rotation of ICE configs
-const ICE_ROTATION_ORDER: (keyof typeof ICE_SERVER_CONFIGS)[] = [
-  "metered", "global", "neutral", "europe", "turnOnly",
-];
 
 interface VideoCallProps {
   roomId: string;
@@ -203,12 +48,13 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState<boolean>(false);
-  const [selectedRegion, setSelectedRegion] = useState<keyof typeof ICE_SERVER_CONFIGS>("metered");
   const [meteredIceServers, setMeteredIceServers] = useState<RTCConfiguration | null>(null);
   const [hideMyVideo, setHideMyVideo] = useState<boolean>(false);
   const [isSpeakerEnabled, setIsSpeakerEnabled] = useState<boolean>(true);
-  const [layoutMode, setLayoutMode] = useState<'auto' | 'grid' | 'stack'>('auto');
-  const [currentPreset, setCurrentPreset] = useState<VideoQualityPreset>('high');
+  const [layoutMode] = useState<'auto' | 'grid' | 'stack'>('auto');
+  // Quality preset is tracked only to drive the adaptive bitrate controller;
+  // the value itself is no longer rendered in the (simplified) header.
+  const [, setCurrentPreset] = useState<VideoQualityPreset>('high');
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -218,11 +64,6 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
 
-  // ICE auto-rotation state
-  const peerIceAttemptRef = useRef<Map<string, number>>(new Map());
-  const workingIceConfigRef = useRef<keyof typeof ICE_SERVER_CONFIGS | null>(null);
-  // Per-peer ICE config currently in use (so rotation can skip it on failure)
-  const peerCurrentConfigRef = useRef<Map<string, keyof typeof ICE_SERVER_CONFIGS>>(new Map());
   // Per-peer counters of locally-gathered ICE candidate types (host/srflx/relay)
   const peerCandidateStatsRef = useRef<Map<string, { host: number; srflx: number; relay: number; prflx: number }>>(new Map());
   // Disconnected peer timers
@@ -238,21 +79,15 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   // Total reconnection attempts (ICE restarts + full reconnections)
   const totalReconnectAttemptsRef = useRef<Map<string, number>>(new Map());
 
-  // Ref to always have up-to-date selectedRegion + meteredIceServers in callbacks
-  const selectedRegionRef = useRef(selectedRegion);
-  selectedRegionRef.current = selectedRegion;
+  // Ref to always have up-to-date meteredIceServers in callbacks
   const meteredIceServersRef = useRef(meteredIceServers);
   meteredIceServersRef.current = meteredIceServers;
 
   // Connection quality monitoring hook
-  const { overallLevel, monitorRef } = useConnectionQuality(peersRef, true);
+  const { monitorRef } = useConnectionQuality(peersRef, true);
 
-  const getIceConfig = useCallback((region?: keyof typeof ICE_SERVER_CONFIGS): RTCConfiguration => {
-    const r = region || selectedRegionRef.current;
-    if (r === 'metered' && meteredIceServersRef.current) {
-      return meteredIceServersRef.current;
-    }
-    return ICE_SERVER_CONFIGS[r].config;
+  const getIceConfig = useCallback((): RTCConfiguration => {
+    return meteredIceServersRef.current || FALLBACK_ICE_CONFIG;
   }, []);
 
   // Update ABC participant cap (self-view stays visible regardless of count)
@@ -398,19 +233,14 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     return socket;
   }, [addDebugLog]);
 
-  // ─── Create peer connection (with optional ICE config override) ────
+  // ─── Create peer connection ───────────────────────────────────────
   const createPeerConnection = useCallback((
     userId: string,
     createOffer: boolean,
-    configOverride?: RTCConfiguration,
-    configKeyOverride?: keyof typeof ICE_SERVER_CONFIGS,
   ) => {
-    const configKey: keyof typeof ICE_SERVER_CONFIGS =
-      configKeyOverride || workingIceConfigRef.current || selectedRegionRef.current;
-    const iceConfig = configOverride || getIceConfig(configKey);
-    peerCurrentConfigRef.current.set(userId, configKey);
+    const iceConfig = getIceConfig();
     peerCandidateStatsRef.current.set(userId, { host: 0, srflx: 0, relay: 0, prflx: 0 });
-    addDebugLog(`🔧 Creating peer connection with ${userId}, initiator: ${createOffer}, ice=${configKey}`);
+    addDebugLog(`🔧 Creating peer connection with ${userId}, initiator: ${createOffer}`);
     const peerConnection = new RTCPeerConnection(iceConfig);
 
     let hasRelayCandidates = false;
@@ -501,7 +331,6 @@ export default function VideoCall({ roomId }: VideoCallProps) {
             reportDiagnostic({
               eventType: "ice_relay_found",
               details: `${userId.substring(0, 8)} via ${event.candidate.protocol} (${event.candidate.relatedAddress || 'no-related'})`,
-              iceConfig: peerCurrentConfigRef.current.get(userId),
             });
           }
           hasRelayCandidates = true;
@@ -522,7 +351,6 @@ export default function VideoCall({ roomId }: VideoCallProps) {
           reportDiagnostic({
             eventType: "ice_gathering_complete",
             details: `${userId.substring(0, 8)} host=${stats.host} srflx=${stats.srflx} relay=${stats.relay}`,
-            iceConfig: peerCurrentConfigRef.current.get(userId),
           });
           if (stats.relay === 0) {
             addDebugLog(`⚠️ No TURN relay candidates for ${userId} — TURN server unreachable or auth failed`);
@@ -535,23 +363,17 @@ export default function VideoCall({ roomId }: VideoCallProps) {
       addDebugLog(`🧊 ICE gathering state for ${userId}: ${peerConnection.iceGatheringState}`);
     };
 
-    // Connection state — auto-ICE rotation on failure
+    // Connection state — ICE restart on failure
     peerConnection.onconnectionstatechange = () => {
       addDebugLog(`🔗 Connection state with ${userId}: ${peerConnection.connectionState}`);
 
       if (peerConnection.connectionState === "connected") {
         addDebugLog(`✅ Successfully connected to ${userId}`);
         // Clear all reconnection attempt counters
-        peerIceAttemptRef.current.delete(userId);
         iceRestartAttemptsRef.current.delete(userId);
         totalReconnectAttemptsRef.current.delete(userId);
         const irt = iceRestartTimersRef.current.get(userId);
         if (irt) { clearTimeout(irt); iceRestartTimersRef.current.delete(userId); }
-        // Determine which config was used — save for future peers
-        const currentConfigKey = peerCurrentConfigRef.current.get(userId)
-          || workingIceConfigRef.current
-          || selectedRegionRef.current;
-        workingIceConfigRef.current = currentConfigKey;
         // Clear disconnect timer if any
         const dt = disconnectTimersRef.current.get(userId);
         if (dt) { clearTimeout(dt); disconnectTimersRef.current.delete(userId); }
@@ -575,13 +397,11 @@ export default function VideoCall({ roomId }: VideoCallProps) {
           reportDiagnostic({
             eventType: "peer_connected",
             details: `${userId.substring(0, 8)} pair=${localType}↔${remoteType} proto=${protocol}`,
-            iceConfig: currentConfigKey,
           });
         }).catch(() => {
           reportDiagnostic({
             eventType: "peer_connected",
             details: `Connected to ${userId.substring(0, 8)}`,
-            iceConfig: currentConfigKey,
           });
         });
       } else if (peerConnection.connectionState === "failed") {
@@ -687,72 +507,19 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addDebugLog]);
 
-  // ─── Handle peer connection failure — ICE restart then full rotation ──
+  // ─── Handle peer connection failure — ICE restart only ─────────────
   const handlePeerFailed = useCallback((userId: string) => {
-    // Try ICE restart first (lightweight, preserves media)
+    // Lightweight ICE restart first (preserves media). Returns false once the
+    // 3 ICE-restart attempts are exhausted.
     if (attemptIceRestart(userId)) return;
-
-    const attempt = (peerIceAttemptRef.current.get(userId) || 0) + 1;
-    peerIceAttemptRef.current.set(userId, attempt);
-
-    const totalAttempts = (totalReconnectAttemptsRef.current.get(userId) || 0) + 1;
-    totalReconnectAttemptsRef.current.set(userId, totalAttempts);
-
-    if (totalAttempts > 8) {
-      addDebugLog(`❌ Max reconnection attempts (8) reached for ${userId.substring(0, 8)}`);
-      reportDiagnostic({ eventType: "peer_failed", details: `Max attempts reached for ${userId.substring(0, 8)}` });
-      removePeer(userId);
-      return;
-    }
-
-    // Build rotation order excluding the config that just failed for this peer
-    const failedConfig = peerCurrentConfigRef.current.get(userId);
-    const order = ICE_ROTATION_ORDER.filter(k => k !== failedConfig);
-
-    if (attempt > order.length) {
-      // Report stats so we can see why no config worked
-      const stats = peerCandidateStatsRef.current.get(userId);
-      const statsStr = stats ? `host=${stats.host} srflx=${stats.srflx} relay=${stats.relay}` : 'no stats';
-      addDebugLog(`❌ All ICE configs exhausted for ${userId} after ${attempt - 1} attempts (${statsStr})`);
-      reportDiagnostic({
-        eventType: "peer_failed",
-        details: `All ICE configs exhausted for ${userId.substring(0, 8)} (${statsStr})`,
-        iceConfig: failedConfig,
-      });
-      removePeer(userId);
-      return;
-    }
-
-    const nextConfigKey = order[attempt - 1];
-    // Exponential backoff with jitter
-    const baseDelay = Math.min(1000 * Math.pow(2, attempt - 1), 30000);
-    const jitter = Math.random() * baseDelay * 0.3;
-    const delay = Math.round(baseDelay + jitter);
-
-    const failedStats = peerCandidateStatsRef.current.get(userId);
-    const failedStatsStr = failedStats ? `host=${failedStats.host} srflx=${failedStats.srflx} relay=${failedStats.relay}` : '';
-    addDebugLog(`🔄 ICE fallback ${attempt}/${order.length} for ${userId}: ${failedConfig || '?'} → ${ICE_SERVER_CONFIGS[nextConfigKey].name} in ${delay}ms (${failedStatsStr})`);
-    reportDiagnostic({
-      eventType: "ice_fallback",
-      details: `Attempt ${attempt} for ${userId.substring(0, 8)}: ${failedConfig || '?'} → ${nextConfigKey} (${failedStatsStr})`,
-      iceConfig: nextConfigKey,
-    });
-
-    // Close old connection
-    const oldPeer = peersRef.current.get(userId);
-    if (oldPeer) {
-      oldPeer.heartbeat?.destroy();
-      oldPeer.connection.close();
-      peersRef.current.delete(userId);
-    }
-
-    setTimeout(() => {
-      if (!socketRef.current?.connected) return;
-      const nextConfig = getIceConfig(nextConfigKey);
-      createPeerConnection(userId, true, nextConfig, nextConfigKey);
-    }, delay);
+    // With a single TURN provider there is nothing to rotate to — report and drop.
+    const stats = peerCandidateStatsRef.current.get(userId);
+    const statsStr = stats ? `host=${stats.host} srflx=${stats.srflx} relay=${stats.relay}` : 'no stats';
+    addDebugLog(`❌ Connection to ${userId.substring(0, 8)} failed after ICE restarts (${statsStr})`);
+    reportDiagnostic({ eventType: "peer_failed", details: `${userId.substring(0, 8)} (${statsStr})` });
+    removePeer(userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addDebugLog, getIceConfig, createPeerConnection, attemptIceRestart]);
+  }, [addDebugLog, attemptIceRestart]);
 
   // ─── Handle disconnected state — ICE restart first, then retry ─────
   const handlePeerDisconnected = useCallback((userId: string) => {
@@ -823,10 +590,8 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     }
 
     // Clean up all per-peer tracking state
-    peerIceAttemptRef.current.delete(userId);
     iceRestartAttemptsRef.current.delete(userId);
     totalReconnectAttemptsRef.current.delete(userId);
-    peerCurrentConfigRef.current.delete(userId);
     peerCandidateStatsRef.current.delete(userId);
     monitorRef.current?.removePeer(userId);
     const irt = iceRestartTimersRef.current.get(userId);
@@ -851,10 +616,8 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     }
 
     remoteVideosRef.current.clear();
-    peerIceAttemptRef.current.clear();
     iceRestartAttemptsRef.current.clear();
     totalReconnectAttemptsRef.current.clear();
-    peerCurrentConfigRef.current.clear();
     peerCandidateStatsRef.current.clear();
     iceRestartTimersRef.current.forEach(t => clearTimeout(t));
     iceRestartTimersRef.current.clear();
@@ -1341,33 +1104,6 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const reconnectAllPeers = () => {
-    addDebugLog(`🔄 Reconnecting all peers with new ICE servers...`);
-
-    const peerIds = Array.from(peersRef.current.keys());
-
-    if (peerIds.length === 0) {
-      addDebugLog(`⚠️ No active peers to reconnect`);
-      return;
-    }
-
-    // Reset ICE attempt counters when manually switching region
-    peerIceAttemptRef.current.clear();
-    workingIceConfigRef.current = null;
-
-    peerIds.forEach(userId => {
-      addDebugLog(`  └─ Closing connection to ${userId.substring(0, 8)}...`);
-      removePeer(userId);
-    });
-
-    peerIds.forEach(userId => {
-      addDebugLog(`  └─ Recreating connection to ${userId.substring(0, 8)}...`);
-      createPeerConnection(userId, true);
-    });
-
-    addDebugLog(`✅ Reconnect initiated for ${peerIds.length} peer(s)`);
-  };
-
   const requestMediaPermissions = async () => {
     try {
       addDebugLog("🔄 Requesting media permissions...");
@@ -1473,12 +1209,7 @@ export default function VideoCall({ roomId }: VideoCallProps) {
   const MuiToolbar = require("@mui/material/Toolbar").default;
   const MuiTypography = require("@mui/material/Typography").default;
   const MuiChip = require("@mui/material/Chip").default;
-  const MuiSelect = require("@mui/material/Select").default;
-  const MuiMenuItem = require("@mui/material/MenuItem").default;
-  const MuiFormControl = require("@mui/material/FormControl").default;
   const MuiIconButton = require("@mui/material/IconButton").default;
-  const MuiButton = require("@mui/material/Button").default;
-  const MuiTooltip = require("@mui/material/Tooltip").default;
   const MuiPaper = require("@mui/material/Paper").default;
 
   // Compute grid columns per layout mode and breakpoint.
@@ -1504,73 +1235,20 @@ export default function VideoCall({ roomId }: VideoCallProps) {
     <MuiBox sx={{ height: "100vh", display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
       {/* Top Header */}
       <MuiAppBar position="static" sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
-        <MuiToolbar variant="dense" sx={{ gap: { xs: 0.5, sm: 1 }, py: { xs: 0.25, sm: 1 }, minHeight: { xs: 44, sm: 48 } }}>
-          <MuiIconButton href="/" size="small" sx={{ color: "grey.400", p: { xs: 0.5, sm: 1 } }}>
-            <span style={{ fontSize: 18 }}>&#x2190;</span>
+        <MuiToolbar sx={{ gap: { xs: 1, sm: 1.5 }, py: { xs: 0.5, sm: 1 }, minHeight: { xs: 60, sm: 68 } }}>
+          <MuiIconButton href="/" sx={{ color: "grey.400" }}>
+            <span style={{ fontSize: 24 }}>&#x2190;</span>
           </MuiIconButton>
 
-          {/* Quality dot — label only on sm+ to save space */}
-          <MuiBox sx={{ display: { xs: "none", sm: "flex" } }}>
-            <QualityIndicator level={overallLevel} preset={currentPreset} showLabel size="sm" />
-          </MuiBox>
-          <MuiBox sx={{ display: { xs: "flex", sm: "none" } }}>
-            <QualityIndicator level={overallLevel} preset={currentPreset} showLabel={false} size="sm" />
-          </MuiBox>
-
-          {/* Status text — desktop only, takes flex space */}
-          <MuiTypography variant="body2" sx={{ color: "grey.300", flexGrow: 1, display: { xs: "none", sm: "block" }, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {/* Status text — info only, desktop */}
+          <MuiTypography variant="body1" sx={{ color: "grey.300", flexGrow: 1, display: { xs: "none", sm: "block" }, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {connectionStatus}
           </MuiTypography>
-          {/* On mobile, just spacer + participant chip */}
           <MuiBox sx={{ flexGrow: 1, display: { xs: "block", sm: "none" } }} />
-          <MuiChip label={participantCount} size="small" sx={{ height: 20, fontSize: 11 }} />
+          <MuiChip label={participantCount} sx={{ height: 32, fontSize: 16, fontWeight: 700 }} />
 
-          {/* Advanced ICE region selector — hidden on mobile (use Debug panel) */}
-          <MuiFormControl size="small" sx={{ minWidth: 140, display: { xs: "none", md: "flex" } }}>
-            <MuiSelect
-              value={selectedRegion}
-              onChange={(e: { target: { value: string } }) => {
-                const newRegion = e.target.value as keyof typeof ICE_SERVER_CONFIGS;
-                setSelectedRegion(newRegion);
-                addDebugLog(`Changed ICE servers to: ${ICE_SERVER_CONFIGS[newRegion].name}`);
-                setTimeout(() => reconnectAllPeers(), 100);
-              }}
-              sx={{ color: "white", fontSize: 12, "& .MuiSelect-icon": { color: "grey.400" } }}
-            >
-              {Object.entries(ICE_SERVER_CONFIGS).map(([key, value]) => (
-                <MuiMenuItem key={key} value={key} sx={{ fontSize: 12 }}>
-                  {value.name}
-                </MuiMenuItem>
-              ))}
-            </MuiSelect>
-          </MuiFormControl>
-
-          {/* Media permissions button — hidden on mobile (camera button calls
-              getUserMedia on tap when no stream exists) */}
-          <MuiButton size="small" variant="outlined" onClick={requestMediaPermissions} sx={{ fontSize: 11, minWidth: 0, px: 1.5, display: { xs: "none", sm: "inline-flex" } }}>
-            {t("video.media_btn")}
-          </MuiButton>
-
-          {/* Layout cycle button: auto → grid → stack → auto */}
-          <MuiTooltip title={layoutMode === 'auto' ? t("layout.auto") : layoutMode === 'grid' ? t("layout.grid") : t("layout.stack")}>
-            <MuiIconButton
-              size="small"
-              onClick={() => setLayoutMode(m => m === 'auto' ? 'grid' : m === 'grid' ? 'stack' : 'auto')}
-              sx={{ color: "grey.300", p: { xs: 0.5, sm: 1 } }}
-            >
-              <span style={{ fontSize: 16 }}>
-                {layoutMode === 'auto' ? '▦' : layoutMode === 'grid' ? '▧' : '☰'}
-              </span>
-            </MuiIconButton>
-          </MuiTooltip>
-
-          <ShareLinkButton size="small" variant="outlined" iconOnly={{ xs: true, sm: false }} />
-
-          <MuiTooltip title={showDebug ? "Скрыть Debug" : "Debug"}>
-            <MuiIconButton size="small" onClick={() => setShowDebug(!showDebug)} sx={{ color: "grey.400", p: { xs: 0.5, sm: 1 } }}>
-              <span style={{ fontSize: 16 }}>&#x1F41B;</span>
-            </MuiIconButton>
-          </MuiTooltip>
+          {/* The only header action — big, obvious Share button for inviting */}
+          <ShareLinkButton size="large" variant="contained" color="primary" iconOnly={false} />
         </MuiToolbar>
       </MuiAppBar>
 

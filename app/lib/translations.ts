@@ -97,6 +97,21 @@ export const translations = {
 
   // ─── Debug panel ──────────────────────────────────────────────────
   "debug.empty": { en: "No logs. Waiting for events...", ru: "Нет логов. Ожидание событий..." },
+
+  // ─── In-app browser gate ──────────────────────────────────────────
+  "inapp.title": { en: "Open in your browser", ru: "Откройте в браузере" },
+  "inapp.desc": {
+    en: "This in-app browser blocks the camera and microphone, so the call won't work here. Please open the link in your phone's browser (Safari or Chrome).",
+    ru: "Встроенный браузер блокирует камеру и микрофон, поэтому звонок здесь не работает. Откройте ссылку в браузере телефона (Safari или Chrome).",
+  },
+  "inapp.open": { en: "Open in browser", ru: "Открыть в браузере" },
+  "inapp.ios_hint": {
+    en: "Tap the ••• (or share) icon at the top, then choose “Open in Safari”.",
+    ru: "Нажмите значок ••• (или «Поделиться») вверху и выберите «Открыть в Safari».",
+  },
+  "inapp.copy": { en: "Copy link", ru: "Скопировать ссылку" },
+  "inapp.copied": { en: "Link copied — paste it in your browser", ru: "Ссылка скопирована — вставьте её в браузер" },
+  "inapp.continue": { en: "Continue anyway", ru: "Всё равно продолжить" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;
