@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 
 // Single TURN provider: Metered.ca (olikirolli account, Free 20GB plan).
 //
-// TURN credentials are NOT secret (they are sent to every browser in the ICE
-// config), so we keep a known-good static credential hardcoded as the reliable
-// base. If METERED_API_KEY is set we additionally try the REST API for fresh
-// credentials, but the static set guarantees relay works without any env/API
-// dependency. STUN is included so most calls go direct P2P and conserve quota.
+// We serve the active static credential directly — NO API call. The Metered
+// REST API on this account returns an older, suspended credential, so calling
+// it would hand clients a dead relay. TURN credentials are not secret (they go
+// to every browser anyway), so hardcoding the known-good one is the reliable
+// choice. STUN is included so most calls go direct P2P and conserve quota.
+//
+// To rotate: create a new credential in the Metered dashboard, click
+// "Show ICE Servers Array", and replace username/credential below.
 
 type IceServer = {
   urls: string | string[];
@@ -14,49 +17,22 @@ type IceServer = {
   credential?: string;
 };
 
-// Your Metered app subdomain. Override via METERED_DOMAIN.
-const METERED_APP = process.env.METERED_DOMAIN || 'olikirolli';
+const TURN_USERNAME = 'd09bbd26fe05452c4e9a7b35';
+const TURN_CREDENTIAL = 'uEdD0mA1psVL8S2v';
 
-// Known-good static credential from the Metered dashboard (olikirolli account).
-// Includes Metered's own STUN + TURN over UDP/TCP/TLS on 80/443.
-const STATIC_METERED: IceServer[] = [
+const ICE_SERVERS: IceServer[] = [
+  // Metered STUN + TURN over UDP/TCP/TLS on 80/443 (443/TLS punches through
+  // strict mobile/corporate firewalls and CGNAT).
   { urls: 'stun:stun.relay.metered.ca:80' },
-  { urls: 'turn:standard.relay.metered.ca:80', username: 'd09bbd26fe05452c4e9a7b35', credential: 'uEdD0mA1psVL8S2v' },
-  { urls: 'turn:standard.relay.metered.ca:80?transport=tcp', username: 'd09bbd26fe05452c4e9a7b35', credential: 'uEdD0mA1psVL8S2v' },
-  { urls: 'turn:standard.relay.metered.ca:443', username: 'd09bbd26fe05452c4e9a7b35', credential: 'uEdD0mA1psVL8S2v' },
-  { urls: 'turns:standard.relay.metered.ca:443?transport=tcp', username: 'd09bbd26fe05452c4e9a7b35', credential: 'uEdD0mA1psVL8S2v' },
-];
-
-// Extra public STUN for redundancy (free, no relay traffic).
-const EXTRA_STUN: IceServer[] = [
+  { urls: 'turn:standard.relay.metered.ca:80', username: TURN_USERNAME, credential: TURN_CREDENTIAL },
+  { urls: 'turn:standard.relay.metered.ca:80?transport=tcp', username: TURN_USERNAME, credential: TURN_CREDENTIAL },
+  { urls: 'turn:standard.relay.metered.ca:443', username: TURN_USERNAME, credential: TURN_CREDENTIAL },
+  { urls: 'turns:standard.relay.metered.ca:443?transport=tcp', username: TURN_USERNAME, credential: TURN_CREDENTIAL },
+  // Public STUN for redundancy (free, no relay traffic).
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
-// Try the Metered REST API for fresh credentials. The endpoint returns a BARE
-// array of ice servers (NOT wrapped in { iceServers }). Returns [] on any error.
-async function getMeteredFromApi(): Promise<IceServer[]> {
-  const apiKey = process.env.METERED_API_KEY;
-  if (!apiKey) return [];
-  try {
-    const res = await fetch(
-      `https://${METERED_APP}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`,
-      { cache: 'no-store' },
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.iceServers)) return data.iceServers;
-    return [];
-  } catch {
-    return [];
-  }
-}
-
 export async function GET() {
-  const apiServers = await getMeteredFromApi();
-  // Prefer fresh API creds when available, else the known-good static set.
-  const turn = apiServers.length > 0 ? apiServers : STATIC_METERED;
-  const iceServers: IceServer[] = [...turn, ...EXTRA_STUN];
-  return NextResponse.json({ iceServers });
+  return NextResponse.json({ iceServers: ICE_SERVERS });
 }
