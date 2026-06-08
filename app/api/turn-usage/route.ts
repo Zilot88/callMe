@@ -26,13 +26,17 @@ export async function GET() {
       `https://${METERED_APP}.metered.live/api/v1/turn/current_usage?secretKey=${key}`,
       { cache: 'no-store' },
     );
-    if (!res.ok) {
+    const data = await res.json();
+    // Free 20GB plan blocks the usage API — surface a friendly, non-alarming
+    // state instead of a raw HTTP error.
+    if (!res.ok || (data?.message && data?.quotaInGB === undefined)) {
+      const msg: string = data?.message || `Metered ${res.status}: ${res.statusText}`;
+      const freeTier = /Free Tier|not available/i.test(msg);
       return NextResponse.json(
-        { error: 'metered_error', message: `Metered ${res.status}: ${res.statusText}` },
+        { error: freeTier ? 'free_tier' : 'metered_error', message: msg },
         { status: 200 },
       );
     }
-    const data = await res.json();
     const quotaInGB = Number(data?.quotaInGB ?? 0);
     const usageInGB = Number(data?.usageInGB ?? 0);
     const overageInGB = Number(data?.overageInGB ?? 0);

@@ -21,17 +21,24 @@ export default function UsagePage() {
   const [data, setData] = useState<Usage | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [freeTier, setFreeTier] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/turn-usage", { cache: "no-store" });
       const json = (await res.json()) as Usage;
-      if (json.error) {
+      if (json.error === "free_tier") {
+        setFreeTier(true);
+        setErr(null);
+        setData(null);
+      } else if (json.error) {
         setErr(json.message || json.error);
+        setFreeTier(false);
         setData(null);
       } else {
         setData(json);
         setErr(null);
+        setFreeTier(false);
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -64,6 +71,14 @@ export default function UsagePage() {
         {loading ? (
           <Box sx={{ textAlign: "center", py: 6 }}>
             <CircularProgress />
+          </Box>
+        ) : freeTier ? (
+          <Box sx={{ bgcolor: "rgba(255,152,0,0.1)", border: 1, borderColor: "warning.main", borderRadius: 2, p: 2 }}>
+            <Typography sx={{ color: "warning.main", fontWeight: 600, mb: 1 }}>Статистика недоступна на бесплатном плане</Typography>
+            <Typography variant="body2" sx={{ color: "grey.400" }}>
+              Metered закрывает API расхода на плане «Free: 20GB». Смотри расход в
+              дашборде: dashboard.metered.ca → TURN Server → Usage.
+            </Typography>
           </Box>
         ) : err ? (
           <Box sx={{ bgcolor: "rgba(244,67,54,0.1)", border: 1, borderColor: "error.main", borderRadius: 2, p: 2 }}>
